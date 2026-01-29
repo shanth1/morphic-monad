@@ -1,6 +1,6 @@
 package consts
 
 const (
-	ModeMonolith      = "monolith"
-	ModeMicroservices = "microservices"
+	ServiceRouter  string = "router"
+	ServiceGateway string = "gateway"
 )

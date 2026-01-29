@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
+
 	"github.com/shanth1/gotools/consts"
 	"github.com/shanth1/gotools/ctx"
 	"github.com/shanth1/gotools/log"
 	"github.com/shanth1/gotools/logkeys"
 	"github.com/shanth1/morphic-monad/internal/app"
 	"github.com/shanth1/morphic-monad/internal/config"
+	"github.com/shanth1/morphic-monad/internal/infra/transport/natsclient"
+	"github.com/shanth1/morphic-monad/internal/modules/router"
+	appconsts "github.com/shanth1/morphic-monad/internal/pkg/consts"
 )
 
 var (
@@ -40,16 +45,22 @@ func main() {
 		Any(logkeys.Env, cfg.App.Env).
 		Str(logkeys.GitHash, CommitHash).
 		Str(logkeys.BuildTime, BuildTime).
+		Str(logkeys.Service, appconsts.ServiceRouter).
 		Msg("application initializing...")
 
 	supervisor := app.New(cfg, logger)
-	supervisor.Register()
+	bus, err := natsclient.New(cfg.Nats.URL)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to init bus client")
+	}
+	router := router.New(bus)
+	supervisor.Register(router)
 
 	appCtx, cancel := ctx.GetAppCtx()
 	defer cancel()
 
 	logger.Info().Msg("starting application...")
-	if err := supervisor.Run(appCtx); err != nil {
+	if err := supervisor.Run(appCtx); err != nil && err != context.Canceled {
 		logger.Fatal().Err(err).Msg("application runtime error")
 	}
 }
