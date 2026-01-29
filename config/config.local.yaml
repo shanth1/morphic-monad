@@ -1,0 +1,12 @@
+app:
+  mode: monolith
+
+nats:
+  url: nats://localhost:4222
+
+logger:
+  level: trace
+  app: my-app
+  service: my-service
+  udp_address:
+  enable_caller: false
