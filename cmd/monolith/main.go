@@ -1,36 +1,29 @@
 package main
 
 import (
-	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/shanth1/gotools/consts"
-	"github.com/shanth1/gotools/ctx"
 	"github.com/shanth1/gotools/log"
 	"github.com/shanth1/gotools/logkeys"
 	"github.com/shanth1/morphic-monad/internal/app"
 	"github.com/shanth1/morphic-monad/internal/config"
+	"github.com/shanth1/morphic-monad/internal/modules/gateway"
+	"github.com/shanth1/morphic-monad/internal/modules/router"
 )
 
 func main() {
-	if err := run(); err != nil {
-		os.Exit(1)
-	}
-}
-
-func run() error {
 	logger := log.New()
 
 	cfg, err := config.Load()
 	if err != nil {
-		logger.Error().Err(err).Msg("load config failed")
-		return err
+		logger.Fatal().Err(err).Msg("load config failed")
 	}
 
-	fmt.Println("TEST:", cfg)
 	if err := cfg.Validate(); err != nil {
-		logger.Error().Err(err).Msg("invalid configuration")
-		return err
+		logger.Fatal().Err(err).Msg("invalid configuration")
 	}
 
 	logger = logger.WithOptions(log.WithConfig(log.Config{
@@ -47,21 +40,22 @@ func run() error {
 		Any(logkeys.Env, cfg.App.Env).
 		Msg("application initializing...")
 
-	application, cleanup, err := app.New(cfg, logger)
+	container, err := app.Bootstrap(cfg, logger)
 	if err != nil {
-		logger.Error().Err(err).Msg("failed to init app")
-		return err
+		logger.Fatal().Err(err).Msg("bootstrap failed")
 	}
-	defer cleanup()
+	defer container.Shutdown()
 
-	appCtx, cancel := ctx.GetAppCtx()
-	defer cancel()
+	gatewaySvc := gateway.New(container.Bus)
+	routerSvc := router.New(container.Bus)
 
-	logger.Info().Msg("starting application...")
-	if err := application.Run(appCtx); err != nil {
-		logger.Error().Err(err).Msg("application runtime error")
-		return err
-	}
+	routerSvc.Start()
+	gatewaySvc.EmulateIngest()
 
-	return nil
+	logger.Info().Msg("monolith running")
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	<-sig
+
+	logger.Info().Msg("shutting down...")
 }

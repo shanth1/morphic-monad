@@ -1,93 +1,54 @@
 package app
 
 import (
-	"context"
-	"errors"
 	"fmt"
-	"time"
 
 	"github.com/shanth1/gotools/log"
 	"github.com/shanth1/morphic-monad/internal/config"
 	"github.com/shanth1/morphic-monad/internal/core/ports"
 	"github.com/shanth1/morphic-monad/internal/infra/transport/natsclient"
 	"github.com/shanth1/morphic-monad/internal/infra/transport/natsembed"
-	"github.com/shanth1/morphic-monad/internal/modules/gateway"
-	"github.com/shanth1/morphic-monad/internal/modules/router"
-	"golang.org/x/sync/errgroup"
 )
 
-type App struct {
-	cfg    *config.Config
-	logger log.Logger
-	bus    ports.Bus
-	server *natsembed.Server
+type Container struct {
+	Cfg    *config.Config
+	Logger log.Logger
+	Bus    ports.Bus
+
+	server  *natsembed.Server
+	cleanup []func()
 }
 
-func New(cfg *config.Config, logger log.Logger) (*App, func(), error) {
-	var cleanups []func()
-	cleanup := func() {
-		for i := len(cleanups) - 1; i >= 0; i-- {
-			cleanups[i]()
-		}
+func Bootstrap(cfg *config.Config, logger log.Logger) (*Container, error) {
+	c := &Container{
+		Cfg:    cfg,
+		Logger: logger,
 	}
 
-	var natsServer *natsembed.Server
-	var err error
-	switch cfg.App.Mode {
-	case "monolith":
-		natsServer, err = natsembed.New()
+	if cfg.App.Mode == "monolith" {
+		server, err := natsembed.New()
 		if err != nil {
-			return nil, cleanup, fmt.Errorf("embed nats error: %w", err)
+			return nil, fmt.Errorf("embed nats init error: %w", err)
 		}
-		cleanups = append(cleanups, func() {
-			natsServer.Shutdown()
-		})
-	default:
-		return nil, cleanup, fmt.Errorf("invalid app mode: %s", cfg.App.Mode)
+		server.Start()
+		c.server = server
+		c.cleanup = append(c.cleanup, func() { server.Shutdown() })
+		logger.Info().Msg("embedded NATS started")
 	}
 
 	bus, err := natsclient.New(cfg.Nats.URL)
 	if err != nil {
-		return nil, cleanup, fmt.Errorf("bus connection error: %w", err)
+		c.Shutdown()
+		return nil, fmt.Errorf("bus connection error: %w", err)
 	}
-	cleanups = append(cleanups, func() {
-		bus.Close()
-	})
+	c.Bus = bus
+	c.cleanup = append(c.cleanup, func() { bus.Close() })
 
-	gatewaySvc := gateway.New(bus)
-	routerSvc := router.New(bus)
-
-	routerSvc.Start()
-	gatewaySvc.EmulateIngest()
-
-	return &App{
-		cfg:    cfg,
-		logger: logger,
-		bus:    bus,
-		server: natsServer,
-	}, cleanup, nil
+	return c, nil
 }
 
-func (a *App) Run(ctx context.Context) error {
-	g, gCtx := errgroup.WithContext(ctx)
-
-	g.Go(func() error {
-		a.server.Start()
-
-		return nil
-	})
-
-	<-gCtx.Done()
-
-	a.logger.Info().Msg("shutting down application...")
-
-	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-		return err
+func (c *Container) Shutdown() {
+	for i := len(c.cleanup) - 1; i >= 0; i-- {
+		c.cleanup[i]()
 	}
-
-	a.logger.Info().Msg("application stopped gracefully")
-	return nil
 }

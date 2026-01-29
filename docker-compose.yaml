@@ -1,0 +1,27 @@
+services:
+  nats:
+    image: nats:latest
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    hostname: nats
+
+  gateway:
+    build:
+      context: .
+      dockerfile: cmd/microservices/gateway/Dockerfile
+    environment:
+      - APP_ENV=local
+      - CONFIG_NATS_URL=nats://nats:4222
+    depends_on:
+      - nats
+
+  router:
+    build:
+      context: .
+      dockerfile: cmd/microservices/router/Dockerfile
+    environment:
+      - APP_ENV=local
+      - CONFIG_NATS_URL=nats://nats:4222
+    depends_on:
+      - nats
