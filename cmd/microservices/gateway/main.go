@@ -7,9 +7,7 @@ import (
 
 	"github.com/shanth1/gotools/consts"
 	"github.com/shanth1/gotools/log"
-	"github.com/shanth1/morphic-monad/internal/app"
 	"github.com/shanth1/morphic-monad/internal/config"
-	"github.com/shanth1/morphic-monad/internal/modules/gateway"
 )
 
 func main() {
@@ -23,15 +21,6 @@ func main() {
 	logger := log.New().WithOptions(log.WithConfig(log.Config{
 		Level: cfg.Logger.Level, JSONOutput: cfg.App.Env == consts.EnvProd,
 	}))
-
-	container, err := app.Bootstrap(cfg, logger)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("bootstrap failed")
-	}
-	defer container.Shutdown()
-
-	svc := gateway.New(container.Bus)
-	svc.EmulateIngest()
 
 	logger.Info().Msg("microservice [gateway] running...")
 	sig := make(chan os.Signal, 1)

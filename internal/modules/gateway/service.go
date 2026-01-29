@@ -17,10 +17,14 @@ func New(bus ports.Bus) *Service {
 	return &Service{bus: bus}
 }
 
-func (s *Service) EmulateIngest() {
+func (s *Service) Run(ctx context.Context) error {
 	ticker := time.NewTicker(3 * time.Second)
-	go func() {
-		for range ticker.C {
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
 			event, _ := envelope.New("tenant-1", "input.text", map[string]string{"msg": "Hello Axon!"})
 
 			log.Println("📢 [Gateway] Ingesting new data...")
@@ -28,5 +32,5 @@ func (s *Service) EmulateIngest() {
 				log.Printf("Gateway Publish Error: %v", err)
 			}
 		}
-	}()
+	}
 }

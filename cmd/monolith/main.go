@@ -1,17 +1,23 @@
 package main
 
 import (
-	"os"
-	"os/signal"
-	"syscall"
+	"context"
 
 	"github.com/shanth1/gotools/consts"
+	"github.com/shanth1/gotools/ctx"
 	"github.com/shanth1/gotools/log"
 	"github.com/shanth1/gotools/logkeys"
 	"github.com/shanth1/morphic-monad/internal/app"
 	"github.com/shanth1/morphic-monad/internal/config"
+	"github.com/shanth1/morphic-monad/internal/infra/transport/natsclient"
+	"github.com/shanth1/morphic-monad/internal/infra/transport/natsembed"
 	"github.com/shanth1/morphic-monad/internal/modules/gateway"
 	"github.com/shanth1/morphic-monad/internal/modules/router"
+)
+
+var (
+	CommitHash = "n/a"
+	BuildTime  = "n/a"
 )
 
 func main() {
@@ -38,24 +44,36 @@ func main() {
 
 	logger.Info().
 		Any(logkeys.Env, cfg.App.Env).
+		Str(logkeys.GitHash, CommitHash).
+		Str(logkeys.BuildTime, BuildTime).
 		Msg("application initializing...")
 
-	container, err := app.Bootstrap(cfg, logger)
+	supervisor := app.New(cfg, logger)
+
+	busServer, err := natsembed.New()
 	if err != nil {
-		logger.Fatal().Err(err).Msg("bootstrap failed")
+		logger.Fatal().Err(err).Msg("failed to init bus server")
 	}
-	defer container.Shutdown()
+	if err := busServer.Start(); err != nil {
+		logger.Fatal().Err(err).Msg("failed to start embed nats")
+	}
 
-	gatewaySvc := gateway.New(container.Bus)
-	routerSvc := router.New(container.Bus)
+	supervisor.Register(busServer)
 
-	routerSvc.Start()
-	gatewaySvc.EmulateIngest()
+	bus, err := natsclient.New(cfg.Nats.URL)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to init bus client")
+	}
+	gateway := gateway.New(bus)
+	router := router.New(bus)
 
-	logger.Info().Msg("monolith running")
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
+	supervisor.Register(gateway, router)
 
-	logger.Info().Msg("shutting down...")
+	appCtx, cancel := ctx.GetAppCtx()
+	defer cancel()
+
+	logger.Info().Msg("starting application...")
+	if err := supervisor.Run(appCtx); err != nil && err != context.Canceled {
+		logger.Fatal().Err(err).Msg("application runtime error")
+	}
 }

@@ -2,6 +2,7 @@ package natsclient
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 
 	"github.com/nats-io/nats.go"
@@ -10,7 +11,7 @@ import (
 )
 
 type Client struct {
-	enc *nats.EncodedConn
+	conn *nats.Conn
 }
 
 func New(url string) (*Client, error) {
@@ -19,30 +20,34 @@ func New(url string) (*Client, error) {
 		return nil, err
 	}
 
-	ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Client{enc: ec}, nil
+	return &Client{conn: nc}, nil
 }
 
 func (c *Client) Publish(ctx context.Context, topic string, event *envelope.Envelope) error {
-	return c.enc.Publish(topic, event)
+	data, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	return c.conn.Publish(topic, data)
 }
 
 func (c *Client) Subscribe(topic string, handler ports.BusHandler, queueGroup string) error {
-	wrapper := func(msg *envelope.Envelope) {
-		if err := handler(context.Background(), msg); err != nil {
+	msgWrapper := func(msg *nats.Msg) {
+		var ev envelope.Envelope
+		if err := json.Unmarshal(msg.Data, &ev); err != nil {
+			log.Printf("❌ [BUS ERROR] Topic: %s | Error unmarshaling message: %v", topic, err)
+			return
+		}
+		if err := handler(context.Background(), &ev); err != nil {
 			log.Printf("❌ [BUS ERROR] Topic: %s | Error: %v", topic, err)
 		}
 	}
 
 	var err error
 	if queueGroup != "" {
-		_, err = c.enc.QueueSubscribe(topic, queueGroup, wrapper)
+		_, err = c.conn.QueueSubscribe(topic, queueGroup, msgWrapper)
 	} else {
-		_, err = c.enc.Subscribe(topic, wrapper)
+		_, err = c.conn.Subscribe(topic, msgWrapper)
 	}
 
 	if err == nil {
@@ -52,6 +57,6 @@ func (c *Client) Subscribe(topic string, handler ports.BusHandler, queueGroup st
 }
 
 func (c *Client) Close() error {
-	c.enc.Close()
+	c.conn.Close()
 	return nil
 }
