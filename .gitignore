@@ -1,0 +1,18 @@
+# Binaries
+/build
+/bin
+/tmp
+*.exe
+
+# Secrets
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# OS specific
+.DS_Store
+
+# Vendor (if needed, but usually ignored in modules mode)
+vendor/
