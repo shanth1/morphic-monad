@@ -9,19 +9,29 @@ services:
   gateway:
     build:
       context: .
-      dockerfile: cmd/microservices/gateway/Dockerfile
+      dockerfile: deployments/docker/Dockerfile.microservice
+      args:
+        SERVICE_NAME: gateway
     environment:
       - APP_ENV=local
-      - CONFIG_NATS_URL=nats://nats:4222
+      - NATS_URL=nats://nats:4222
+      - LOGGER_APP=morphic
+      - LOGGER_SERVICE=gateway
+      - LOGGER_LEVEL=debug
     depends_on:
       - nats
 
   router:
     build:
       context: .
-      dockerfile: cmd/microservices/router/Dockerfile
+      dockerfile: deployments/docker/Dockerfile.microservice
+      args:
+        SERVICE_NAME: router
     environment:
       - APP_ENV=local
-      - CONFIG_NATS_URL=nats://nats:4222
+      - NATS_URL=nats://nats:4222
+      - LOGGER_APP=morphic
+      - LOGGER_SERVICE=router
+      - LOGGER_LEVEL=debug
     depends_on:
       - nats

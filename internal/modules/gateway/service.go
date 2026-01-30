@@ -18,18 +18,30 @@ func New(bus ports.Bus) *Service {
 }
 
 func (s *Service) Run(ctx context.Context) error {
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	log.Println("🚀 [Gateway] Started. Sending heartbeat events...")
 
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil
 		case <-ticker.C:
-			event, _ := envelope.New("tenant-1", "input.text", map[string]string{"msg": "Hello Axon!"})
+			payload := map[string]string{
+				"content": "Hello World from Gateway",
+				"source":  "simulation",
+			}
 
-			log.Println("📢 [Gateway] Ingesting new data...")
-			if err := s.bus.Publish(context.Background(), "data.raw", event); err != nil {
-				log.Printf("Gateway Publish Error: %v", err)
+			event, err := envelope.New("tenant-default", "data.text.ingest", payload)
+			if err != nil {
+				log.Printf("Error creating envelope: %v", err)
+				continue
+			}
+
+			log.Printf("📢 [Gateway] Publishing Event ID: %s", event.ID)
+			if err := s.bus.Publish(ctx, "data.raw", event); err != nil {
+				log.Printf("❌ Gateway Publish Error: %v", err)
 			}
 		}
 	}

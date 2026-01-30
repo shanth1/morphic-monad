@@ -20,7 +20,7 @@ type Config struct {
 	} `yaml:"app"`
 
 	Nats struct {
-		URL string `yaml:"url" env-default:"nats://localhost:4222"`
+		URL string `yaml:"url" env:"NATS_URL" env-default:"nats://localhost:4222"`
 	} `yaml:"nats"`
 
 	Gateway struct {

@@ -16,6 +16,7 @@ type Envelope struct {
 	Timestamp time.Time       `json:"timestamp"`
 	Meta      Metadata        `json:"meta,omitempty"`
 	Payload   json.RawMessage `json:"payload"`
+	CreatedAt time.Time       `json:"created_at"`
 }
 
 func New(tenantID, eventType string, payload any) (*Envelope, error) {
@@ -31,6 +32,7 @@ func New(tenantID, eventType string, payload any) (*Envelope, error) {
 		Timestamp: time.Now().UTC(),
 		Meta:      make(Metadata),
 		Payload:   payloadBytes,
+		CreatedAt: time.Now().UTC(),
 	}, nil
 }
 

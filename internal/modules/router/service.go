@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 
 	"github.com/shanth1/morphic-monad/internal/core/ports"
@@ -17,24 +18,26 @@ func New(bus ports.Bus) *Service {
 }
 
 func (s *Service) Run(ctx context.Context) error {
-	err := s.bus.Subscribe("data.raw", s.handleEvent, "router-workers")
+	err := s.bus.Subscribe("data.raw", s.handleRawData, "router_group")
 	if err != nil {
 		return err
 	}
 
-	log.Println("✅ [Router] Started & Listening...")
-
+	log.Println("✅ [Router] Subscribed to 'data.raw'")
 	<-ctx.Done()
-
-	log.Println("🛑 [Router] Shutting down...")
-
 	return nil
 }
 
-func (s *Service) handleEvent(ctx context.Context, event *envelope.Envelope) error {
-	log.Printf("🤖 [Router] Received Event ID: %s | Type: %s", event.ID, event.Type)
+func (s *Service) handleRawData(ctx context.Context, event *envelope.Envelope) error {
+	log.Printf("⚡ [Router] Received Event ID: %s | Type: %s | Tenant: %s", event.ID, event.Type, event.TenantID)
 
-	// TODO: routing logic here
+	var data map[string]string
+	if err := json.Unmarshal(event.Payload, &data); err != nil {
+		log.Printf("   Error decoding payload: %v", err)
+		return err
+	}
+
+	log.Printf("   Content: %s", data["content"])
 
 	return nil
 }

@@ -29,6 +29,11 @@ func main() {
 		logger.Fatal().Err(err).Msg(logmsg.LoadConfigFailed)
 	}
 
+	// TODO: default nats url in config
+	if cfg.Nats.URL == "" {
+		cfg.Nats.URL = "nats://127.0.0.1:4222"
+	}
+
 	if err := cfg.Validate(); err != nil {
 		logger.Fatal().Err(err).Msg(logmsg.ValidatingConfigFailed)
 	}
