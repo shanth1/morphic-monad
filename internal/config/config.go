@@ -16,8 +16,7 @@ import (
 
 type Config struct {
 	App struct {
-		Env  consts.Env `yaml:"-" env:"APP_ENV" validate:"required,oneof=local dev stage prod"`
-		Mode string     `yaml:"mode" env-default:"monolith" validate:"required,oneof=monolith microservices"`
+		Env consts.Env `yaml:"-" env:"APP_ENV" validate:"required,oneof=local dev stage prod"`
 	} `yaml:"app"`
 
 	Nats struct {

@@ -12,6 +12,7 @@ import (
 	"github.com/shanth1/morphic-monad/internal/infra/transport/natsclient"
 	"github.com/shanth1/morphic-monad/internal/modules/router"
 	appconsts "github.com/shanth1/morphic-monad/internal/pkg/consts"
+	"github.com/shanth1/morphic-monad/internal/pkg/logmsg"
 )
 
 var (
@@ -24,11 +25,11 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		logger.Fatal().Err(err).Msg("load config failed")
+		logger.Fatal().Err(err).Msg(logmsg.LoadConfigFailed)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		logger.Fatal().Err(err).Msg("invalid configuration")
+		logger.Fatal().Err(err).Msg(logmsg.ValidatingConfigFailed)
 	}
 
 	logger = logger.WithOptions(log.WithConfig(log.Config{
@@ -46,12 +47,12 @@ func main() {
 		Str(logkeys.GitHash, CommitHash).
 		Str(logkeys.BuildTime, BuildTime).
 		Str(logkeys.Service, appconsts.ServiceRouter).
-		Msg("application initializing...")
+		Msg(logmsg.AppInitializing)
 
 	supervisor := app.New(cfg, logger)
 	bus, err := natsclient.New(cfg.Nats.URL)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to init bus client")
+		logger.Fatal().Err(err).Msg(logmsg.InitBusFailed)
 	}
 	router := router.New(bus)
 	supervisor.Register(router)
@@ -59,8 +60,8 @@ func main() {
 	appCtx, cancel := ctx.GetAppCtx()
 	defer cancel()
 
-	logger.Info().Msg("starting application...")
+	logger.Info().Msg(logmsg.AppStarting)
 	if err := supervisor.Run(appCtx); err != nil && err != context.Canceled {
-		logger.Fatal().Err(err).Msg("application runtime error")
+		logger.Fatal().Err(err).Msg(logmsg.AppRuntimeError)
 	}
 }
