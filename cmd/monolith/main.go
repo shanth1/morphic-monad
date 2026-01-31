@@ -67,7 +67,7 @@ func main() {
 
 	supervisor.Register(busServer)
 
-	bus, err := natsclient.New(cfg.Nats.URL)
+	bus, err := natsclient.New(appconsts.ServiceMonolith, cfg.Nats.URL)
 	if err != nil {
 		logger.Fatal().Err(err).Msg(logmsg.InitBusFailed)
 	}

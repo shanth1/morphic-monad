@@ -15,9 +15,9 @@ type Client struct {
 	conn *nats.Conn
 }
 
-func New(url string) (*Client, error) {
+func New(name, url string) (*Client, error) {
 	opts := []nats.Option{
-		nats.Name("MorphicMonad"),
+		nats.Name(name),
 		nats.RetryOnFailedConnect(true),
 		nats.ReconnectWait(2 * time.Second),
 		nats.MaxReconnects(10),
