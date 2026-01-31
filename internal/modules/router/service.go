@@ -3,18 +3,24 @@ package router
 import (
 	"context"
 	"encoding/json"
-	"log"
 
+	"github.com/shanth1/gotools/log"
+	"github.com/shanth1/gotools/logkeys"
 	"github.com/shanth1/morphic-monad/internal/core/ports"
+	"github.com/shanth1/morphic-monad/internal/pkg/logmsg"
 	"github.com/shanth1/morphic-monad/pkg/envelope"
 )
 
 type Service struct {
-	bus ports.Bus
+	bus    ports.Bus
+	logger log.Logger
 }
 
-func New(bus ports.Bus) *Service {
-	return &Service{bus: bus}
+func New(bus ports.Bus, l log.Logger) *Service {
+	return &Service{
+		bus:    bus,
+		logger: l,
+	}
 }
 
 func (s *Service) Run(ctx context.Context) error {
@@ -23,21 +29,21 @@ func (s *Service) Run(ctx context.Context) error {
 		return err
 	}
 
-	log.Println("✅ [Router] Subscribed to 'data.raw'")
+	s.logger.Info().Str(logkeys.Topic, "data.raw").Msg("subscribed")
 	<-ctx.Done()
 	return nil
 }
 
 func (s *Service) handleRawData(ctx context.Context, event *envelope.Envelope) error {
-	log.Printf("⚡ [Router] Received Event ID: %s | Type: %s | Tenant: %s", event.ID, event.Type, event.TenantID)
+	s.logger.Info().Str("event_id", event.ID).Str("tenant_id", event.TenantID).Str("type", event.Type).Msg("received event")
 
 	var data map[string]string
 	if err := json.Unmarshal(event.Payload, &data); err != nil {
-		log.Printf("   Error decoding payload: %v", err)
+		s.logger.Error().Err(err).Msg(logmsg.UnmarshallingFailed)
 		return err
 	}
 
-	log.Printf("   Content: %s", data["content"])
+	s.logger.Info().Int(logkeys.ContentLen, len(data["content"])).Msg("content")
 
 	return nil
 }

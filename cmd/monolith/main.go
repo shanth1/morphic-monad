@@ -72,7 +72,7 @@ func main() {
 		logger.Fatal().Err(err).Msg(logmsg.InitBusFailed)
 	}
 	gateway := gateway.New(bus, logger)
-	router := router.New(bus)
+	router := router.New(bus, logger)
 
 	supervisor.Register(gateway, router)
 
