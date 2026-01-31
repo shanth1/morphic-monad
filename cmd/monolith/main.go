@@ -57,7 +57,7 @@ func main() {
 
 	supervisor := app.New(cfg, logger)
 
-	busServer, err := natsembed.New()
+	busServer, err := natsembed.New(logger)
 	if err != nil {
 		logger.Fatal().Err(err).Msg(logmsg.InitBusServerFailed)
 	}
