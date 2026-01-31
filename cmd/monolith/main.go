@@ -13,6 +13,7 @@ import (
 	"github.com/shanth1/morphic-monad/internal/infra/transport/natsembed"
 	"github.com/shanth1/morphic-monad/internal/modules/gateway"
 	"github.com/shanth1/morphic-monad/internal/modules/router"
+	appconsts "github.com/shanth1/morphic-monad/internal/pkg/consts"
 	"github.com/shanth1/morphic-monad/internal/pkg/logmsg"
 )
 
@@ -40,8 +41,8 @@ func main() {
 
 	logger = logger.WithOptions(log.WithConfig(log.Config{
 		Level:        cfg.Logger.Level,
-		App:          cfg.Logger.App,
-		Service:      cfg.Logger.Service,
+		App:          appconsts.AppName,
+		Service:      appconsts.ServiceMonolith,
 		UDPAddress:   cfg.Logger.UDPAddress,
 		EnableCaller: cfg.Logger.EnableCaller,
 		Console:      cfg.App.Env != consts.EnvProd,

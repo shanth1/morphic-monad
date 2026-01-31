@@ -1,6 +1,8 @@
 package consts
 
 const (
-	ServiceRouter  string = "router"
-	ServiceGateway string = "gateway"
+	AppName         string = "morphic-monad"
+	ServiceMonolith string = "monolith"
+	ServiceRouter   string = "router"
+	ServiceGateway  string = "gateway"
 )

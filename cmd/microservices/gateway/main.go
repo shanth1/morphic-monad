@@ -34,8 +34,8 @@ func main() {
 
 	logger = logger.WithOptions(log.WithConfig(log.Config{
 		Level:        cfg.Logger.Level,
-		App:          cfg.Logger.App,
-		Service:      cfg.Logger.Service,
+		App:          appconsts.AppName,
+		Service:      appconsts.ServiceGateway,
 		UDPAddress:   cfg.Logger.UDPAddress,
 		EnableCaller: cfg.Logger.EnableCaller,
 		Console:      cfg.App.Env != consts.EnvProd,
