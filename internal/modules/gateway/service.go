@@ -2,26 +2,30 @@ package gateway
 
 import (
 	"context"
-	"log"
 	"time"
 
+	"github.com/shanth1/gotools/log"
 	"github.com/shanth1/morphic-monad/internal/core/ports"
 	"github.com/shanth1/morphic-monad/pkg/envelope"
 )
 
 type Service struct {
-	bus ports.Bus
+	bus    ports.Bus
+	logger log.Logger
 }
 
-func New(bus ports.Bus) *Service {
-	return &Service{bus: bus}
+func New(bus ports.Bus, l log.Logger) *Service {
+	return &Service{
+		bus:    bus,
+		logger: l,
+	}
 }
 
 func (s *Service) Run(ctx context.Context) error {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	log.Println("🚀 [Gateway] Started. Sending heartbeat events...")
+	s.logger.Info().Msg("staring gateway service")
 
 	for {
 		select {
@@ -35,13 +39,13 @@ func (s *Service) Run(ctx context.Context) error {
 
 			event, err := envelope.New("tenant-default", "data.text.ingest", payload)
 			if err != nil {
-				log.Printf("Error creating envelope: %v", err)
+				s.logger.Error().Err(err).Msg("creating envelope")
 				continue
 			}
 
-			log.Printf("📢 [Gateway] Publishing Event ID: %s", event.ID)
+			s.logger.Info().Str("event_id", event.ID).Msg("publishing event")
 			if err := s.bus.Publish(ctx, "data.raw", event); err != nil {
-				log.Printf("❌ Gateway Publish Error: %v", err)
+				s.logger.Error().Str("event_id", event.ID).Err(err).Msg("publishing event")
 			}
 		}
 	}

@@ -54,7 +54,7 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg(logmsg.InitBusFailed)
 	}
-	gateway := gateway.New(bus)
+	gateway := gateway.New(bus, logger)
 	supervisor.Register(gateway)
 
 	appCtx, cancel := ctx.GetAppCtx()
