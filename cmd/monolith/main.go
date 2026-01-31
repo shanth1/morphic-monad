@@ -71,8 +71,8 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg(logmsg.InitBusFailed)
 	}
-	gateway := gateway.New(bus, logger)
-	router := router.New(bus, logger)
+	gateway := gateway.New(bus, logger.With(log.Str(logkeys.Component, appconsts.ServiceGateway)))
+	router := router.New(bus, logger.With(log.Str(logkeys.Component, appconsts.ServiceRouter)))
 
 	supervisor.Register(gateway, router)
 

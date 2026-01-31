@@ -41,6 +41,7 @@ func main() {
 		Console:      cfg.App.Env != consts.EnvProd,
 		JSONOutput:   cfg.App.Env == consts.EnvProd,
 	}))
+	logger = logger.With(log.Str(logkeys.Component, appconsts.ServiceGateway))
 
 	logger.Info().
 		Any(logkeys.Env, cfg.App.Env).
