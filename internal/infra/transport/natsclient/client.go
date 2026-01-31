@@ -7,15 +7,19 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/shanth1/gotools/log"
+	"github.com/shanth1/gotools/logkeys"
 	"github.com/shanth1/morphic-monad/internal/core/ports"
+	"github.com/shanth1/morphic-monad/internal/pkg/logmsg"
 	"github.com/shanth1/morphic-monad/pkg/envelope"
 )
 
 type Client struct {
-	conn *nats.Conn
+	conn   *nats.Conn
+	logger log.Logger
 }
 
-func New(name, url string) (*Client, error) {
+func New(name, url string, l log.Logger) (*Client, error) {
 	opts := []nats.Option{
 		nats.Name(name),
 		nats.RetryOnFailedConnect(true),
@@ -25,10 +29,13 @@ func New(name, url string) (*Client, error) {
 
 	nc, err := nats.Connect(url, opts...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("connection failed: %w", err)
 	}
 
-	return &Client{conn: nc}, nil
+	return &Client{
+		conn:   nc,
+		logger: l,
+	}, nil
 }
 
 func (c *Client) Publish(ctx context.Context, topic string, event *envelope.Envelope) error {
@@ -62,7 +69,7 @@ func (c *Client) Subscribe(topic string, handler ports.BusHandler, queueGroup st
 	msgWrapper := func(msg *nats.Msg) {
 		var ev envelope.Envelope
 		if err := json.Unmarshal(msg.Data, &ev); err != nil {
-			fmt.Printf("[BUS ERROR] Invalid JSON on %s: %v\n", topic, err)
+			c.logger.Error().Str(logkeys.Topic, topic).Err(err).Msg(logmsg.UnmarshallingFailed)
 			return
 		}
 

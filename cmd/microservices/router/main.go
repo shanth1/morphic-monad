@@ -50,7 +50,7 @@ func main() {
 		Msg(logmsg.AppInitializing)
 
 	supervisor := app.New(cfg, logger)
-	bus, err := natsclient.New(appconsts.ServiceRouter, cfg.Nats.URL)
+	bus, err := natsclient.New(appconsts.ServiceRouter, cfg.Nats.URL, logger)
 	if err != nil {
 		logger.Fatal().Err(err).Msg(logmsg.InitBusFailed)
 	}

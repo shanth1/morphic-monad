@@ -9,4 +9,6 @@ const (
 	InitBusServerFailed    = "init_bus_server_failed"
 	LoadConfigFailed       = "load_config_failed"
 	ValidatingConfigFailed = "validating_configuration_failed"
+	MarshallingFailed      = "marshalling_failed"
+	UnmarshallingFailed    = "unmarshalling_failed"
 )
