@@ -38,20 +38,20 @@ func main() {
 		Service:      appconsts.ServiceRouter,
 		UDPAddress:   cfg.Logger.UDPAddress,
 		EnableCaller: cfg.Logger.EnableCaller,
-		Console:      cfg.App.Env != consts.EnvProd,
-		JSONOutput:   cfg.App.Env == consts.EnvProd,
+		Console:      cfg.System.Env != consts.EnvProd,
+		JSONOutput:   cfg.System.Env == consts.EnvProd,
 	}))
 	logger = logger.With(log.Str(logkeys.Component, appconsts.ServiceRouter))
 
 	logger.Info().
-		Any(logkeys.Env, cfg.App.Env).
+		Any(logkeys.Env, cfg.System.Env).
 		Str(logkeys.GitHash, CommitHash).
 		Str(logkeys.BuildTime, BuildTime).
 		Str(logkeys.Service, appconsts.ServiceRouter).
 		Msg(logmsg.AppInitializing)
 
 	supervisor := app.New(cfg, logger)
-	bus, err := natsclient.New(appconsts.ServiceRouter, cfg.Nats.URL, logger)
+	bus, err := natsclient.New(appconsts.ServiceRouter, cfg.Transport.Nats.URL, logger)
 	if err != nil {
 		logger.Fatal().Err(err).Msg(logmsg.InitBusFailed)
 	}

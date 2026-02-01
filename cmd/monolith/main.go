@@ -30,11 +30,6 @@ func main() {
 		logger.Fatal().Err(err).Msg(logmsg.LoadConfigFailed)
 	}
 
-	// TODO: default nats url in config
-	if cfg.Nats.URL == "" {
-		cfg.Nats.URL = "nats://127.0.0.1:4222"
-	}
-
 	if err := cfg.Validate(); err != nil {
 		logger.Fatal().Err(err).Msg(logmsg.ValidatingConfigFailed)
 	}
@@ -45,12 +40,12 @@ func main() {
 		Service:      appconsts.ServiceMonolith,
 		UDPAddress:   cfg.Logger.UDPAddress,
 		EnableCaller: cfg.Logger.EnableCaller,
-		Console:      cfg.App.Env != consts.EnvProd,
-		JSONOutput:   cfg.App.Env == consts.EnvProd,
+		Console:      cfg.System.Env != consts.EnvProd,
+		JSONOutput:   cfg.System.Env == consts.EnvProd,
 	}))
 
 	logger.Info().
-		Any(logkeys.Env, cfg.App.Env).
+		Any(logkeys.Env, cfg.System.Env).
 		Str(logkeys.GitHash, CommitHash).
 		Str(logkeys.BuildTime, BuildTime).
 		Msg(logmsg.AppInitializing)
@@ -67,7 +62,7 @@ func main() {
 
 	supervisor.Register(busServer)
 
-	bus, err := natsclient.New(appconsts.ServiceMonolith, cfg.Nats.URL, logger)
+	bus, err := natsclient.New(appconsts.ServiceMonolith, cfg.Transport.Nats.URL, logger)
 	if err != nil {
 		logger.Fatal().Err(err).Msg(logmsg.InitBusFailed)
 	}

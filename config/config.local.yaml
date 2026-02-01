@@ -1,9 +1,196 @@
-nats:
-  url: nats://localhost:4222
+# ==============================================================================
+# MORPHIC MONAD CONFIGURATION TEMPLATE
+# ==============================================================================
+# This file serves as the blueprint for the application configuration.
+# Values can be overridden by Environment Variables (e.g., APP_ENV, NATS_URL).
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. CORE SYSTEM & INFRASTRUCTURE
+# ------------------------------------------------------------------------------
+system:
+  env: "local"          # Options: local, dev, stage, prod
+  id: "monad-node-1"    # Unique instance ID
+  version: "0.0.1"
 
 logger:
-  level: trace
-  app: my-app
-  service: my-service
-  udp_address:
-  enable_caller: false
+  app: "morphic-monad"
+  level: "debug"        # Options: debug, info, warn, error, trace
+  service: "monolith"   # Overridden by specific services in microservice mode
+  udp_address: ""       # Optional: e.g., "logstash:5000"
+  enable_caller: true   # Log file and line number
+
+transport:
+  type: "nats"          # Options: nats, redis, memory
+  nats:
+    url: "nats://localhost:4222"
+  # redis:
+  #   url: "redis://localhost:6379"
+
+# ------------------------------------------------------------------------------
+# 2. MODULES (GATEWAY, ROUTER, ORCHESTRATORS)
+# ------------------------------------------------------------------------------
+modules:
+
+  # --- Gateway Service ---
+  gateway:
+    port: ":8080"
+    read_timeout: "15s"
+    write_timeout: "15s"
+    auth_enabled: false
+    api_key_header: "X-API-Key"
+
+  # --- Router Service (Dispatcher) ---
+  router:
+    strategy: "static" # Options: static, ml, llm
+
+    # Configuration for "static" strategy
+    rules:
+      # Example 1: If input is a file -> Send to Ingestor Pipeline
+      - match:
+          type: "input.file"
+        target_id: "general_ingest"
+        target_type: "pipeline"
+
+      # Example 2: If input is text -> Send to Engine for RAG
+      - match:
+          type: "input.text"
+        target_id: "default_rag" # Maps to engine mode or context
+        target_type: "engine"
+
+    # Configuration for "llm" strategy (Optional)
+    llm_classifier:
+      system_prompt: "Classify the incoming JSON envelope into 'ingest' or 'search' intent."
+      adapter:
+        provider: "openai"
+        openai:
+          model: "gpt-4o-mini"
+          # key: via ENV LLM_OPENAI_KEY
+
+  # --- Ingestor (Static ETL Pipelines) ---
+  ingestor:
+    enabled: true
+    pipelines:
+      # Pipeline ID: general_ingest
+      general_ingest:
+        description: "Standard pipeline for document processing"
+        steps:
+          - name: "OCR Processing"
+            worker: "worker.ocr.extract" # Logical name mapped to topic in code
+            timeout: "60s"
+            params:
+              lang: "eng"
+
+          - name: "Text Embedding"
+            worker: "worker.embed.vectorize"
+            timeout: "10s"
+
+          - name: "Save to VectorDB"
+            worker: "worker.vector.upsert"
+            timeout: "5s"
+
+  # --- Engine (Dynamic RAG/Agent) ---
+  engine:
+    enabled: true
+    mode: "rag" # Options: search, rag, agent
+
+    system_prompt: "You are a helpful assistant. Use the provided context to answer questions."
+    max_tokens: 1000
+    temperature: 0.7
+
+    # LLM used for generation
+    llm:
+      provider: "openai"
+      openai:
+        model: "gpt-4o"
+        # key: via ENV LLM_OPENAI_KEY
+
+    # Tools available to the Agent (if mode is 'agent')
+    enabled_tools:
+      - "web_search"
+      - "calculator"
+
+  # ----------------------------------------------------------------------------
+  # 3. TOOLS (WORKER ADAPTERS CONFIGURATION)
+  # ----------------------------------------------------------------------------
+  tools:
+
+    # --- OCR (Image to Text) ---
+    ocr:
+      provider: "mock" # Options: tesseract, google, mock
+      tesseract:
+        path: "/usr/bin/tesseract"
+        languages: "eng+rus"
+      google:
+        # key: via ENV OCR_GOOGLE_KEY
+        key: ""
+
+    # --- Audio (Speech to Text) ---
+    audio:
+      provider: "mock" # Options: whisper, assembly, mock
+      whisper:
+        model_path: "./models/ggml-base.bin"
+        api_url: "http://localhost:9000/v1/audio/transcriptions"
+      assembly:
+        # key: via ENV ASSEMBLY_KEY
+        key: ""
+
+    # --- Embedder (Text to Vector) ---
+    embedder:
+      provider: "openai" # Options: openai, openrouter, ollama, local, mock
+      dimensions: 1536
+
+      openai:
+        model: "text-embedding-3-small"
+        # key: via ENV OPENAI_KEY
+
+      openrouter:
+        model: "text-embedding-ada-002"
+        # key: via ENV OPENROUTER_KEY
+
+      ollama:
+        base_url: "http://localhost:11434"
+        model: "nomic-embed-text"
+
+      local:
+        model_path: "./models/all-MiniLM-L6-v2.onnx"
+        use_gpu: false
+
+    # --- Blob Store (File Storage) ---
+    blob_store:
+      provider: "s3" # Options: s3 (works for MinIO), filesystem, mock
+
+      filesystem:
+        root_path: "./uploads"
+        base_url: "http://localhost:8080/files"
+
+      s3:
+        endpoint: "localhost:9000" # MinIO address
+        bucket: "documents"
+        region: "us-east-1"
+        use_ssl: false
+        force_path_style: true # Required for MinIO
+        # access_key: via ENV S3_ACCESS_KEY
+        # secret_key: via ENV S3_SECRET_KEY
+
+    # --- Vector DB (Semantic Index) ---
+    vector_db:
+      provider: "qdrant" # Options: qdrant, milvus, mock
+      qdrant:
+        host: "localhost"
+        port: 6334
+        collection_prefix: "dev_"
+        use_tls: false
+        # key: via ENV QDRANT_KEY
+
+    # --- Web Search (External Data) ---
+    web_search:
+      provider: "mock" # Options: google, tavily, mock
+      google:
+        # key: via ENV GOOGLE_SEARCH_KEY
+        # cx: via ENV GOOGLE_SEARCH_CX
+        key: ""
+        cx: ""
+      tavily:
+        # key: via ENV TAVILY_KEY
+        key: ""
