@@ -18,7 +18,7 @@ logger:
   level: 'debug' # Options: debug, info, warn, error, trace
   service: 'monolith' # Overridden by specific services in microservice mode
   udp_address: '' # Optional: e.g., "logstash:5000" for centralized logging
-  enable_caller: true # Log file and line number (useful for debugging)
+  enable_caller: false # Log file and line number (useful for debugging)
 
 transport:
   # NATS JetStream is the unified backbone for both Monolith and Microservices
