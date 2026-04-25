@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -15,22 +14,27 @@ import (
 
 // Clients implements the EventPublisher and EventSubscriber ports.
 type Client struct {
-	nc     *nats.Conn
-	js     jetstream.JetStream
-	logger log.Logger
+	nc         *nats.Conn
+	js         jetstream.JetStream
+	logger     log.Logger
+	streamName string
 }
 
-func NewClient(name, url string, l log.Logger) (*Client, error) {
+func NewClient(name, url, streamName string, l log.Logger) (*Client, error) {
 	opts := []nats.Option{
 		nats.Name(name),
-		nats.RetryOnFailedConnect(true),
-		nats.MaxReconnects(-1),
-		nats.ReconnectWait(2 * time.Second),
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
-			l.Error().Err(err).Msg("disconnected from NATS")
+			if err != nil {
+				l.Debug().Err(err).Msg("disconnected from NATS")
+			} else {
+				l.Debug().Msg("disconnected from NATS gracefully")
+			}
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
 			l.Info().Msg("reconnected to NATS")
+		}),
+		nats.ClosedHandler(func(nc *nats.Conn) {
+			l.Debug().Msg("NATS connection closed")
 		}),
 	}
 
@@ -45,9 +49,10 @@ func NewClient(name, url string, l log.Logger) (*Client, error) {
 	}
 
 	return &Client{
-		nc:     nc,
-		js:     js,
-		logger: l,
+		nc:         nc,
+		js:         js,
+		logger:     l,
+		streamName: streamName,
 	}, nil
 }
 
@@ -69,9 +74,7 @@ func (c *Client) Publish(ctx context.Context, topic events.Topic, env *events.En
 }
 
 func (c *Client) Subscribe(ctx context.Context, topic string, queueGroup string, handler events.Handler) error {
-	streamName := "PLATFORM_STREAM"
-
-	consumer, err := c.js.CreateOrUpdateConsumer(ctx, streamName, jetstream.ConsumerConfig{
+	consumer, err := c.js.CreateOrUpdateConsumer(ctx, c.streamName, jetstream.ConsumerConfig{
 		Durable:       queueGroup,
 		FilterSubject: topic,
 		AckPolicy:     jetstream.AckExplicitPolicy,
@@ -117,6 +120,16 @@ func (c *Client) Subscribe(ctx context.Context, topic string, queueGroup string,
 	}()
 
 	return nil
+}
+
+// InitStream checks for the existence of a stream and creates it if necessary
+func (c *Client) InitStream(ctx context.Context) error {
+	_, err := c.js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+		Name:     c.streamName,
+		Subjects: []string{"platform.>"},
+		Storage:  jetstream.MemoryStorage,
+	})
+	return err
 }
 
 func (c *Client) Close() {
