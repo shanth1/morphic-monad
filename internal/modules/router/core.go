@@ -32,6 +32,10 @@ func (s *Service) Start(ctx context.Context) error {
 	}
 
 	s.logger.Info().Msg("router core started, listening for events")
+
+	<-ctx.Done()
+	s.logger.Info().Msg("router core shutting down")
+
 	return nil
 }
 
