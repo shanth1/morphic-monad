@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/shanth1/gotools/consts"
+	goconsts "github.com/shanth1/gotools/consts"
 	"github.com/shanth1/gotools/log"
 	"github.com/shanth1/gotools/logkeys"
 
@@ -16,6 +16,7 @@ import (
 	"github.com/shanth1/morphic-monad/internal/infra/bus"
 	"github.com/shanth1/morphic-monad/internal/infra/config"
 	infrahttp "github.com/shanth1/morphic-monad/internal/infra/http"
+	"github.com/shanth1/morphic-monad/internal/pkg/consts"
 
 	"github.com/shanth1/morphic-monad/internal/modules/gateway"
 	gatewayhttp "github.com/shanth1/morphic-monad/internal/modules/gateway/adapters/http"
@@ -25,11 +26,6 @@ import (
 var (
 	CommitHash = "n/a"
 	BuildTime  = "n/a"
-)
-
-const (
-	AppName        = "morphic-monad"
-	ServiceGateway = "gateway-svc"
 )
 
 func main() {
@@ -46,18 +42,18 @@ func main() {
 
 	logger := baseLogger.WithOptions(log.WithConfig(log.Config{
 		Level:        cfg.Logger.Level,
-		App:          AppName,
-		Service:      ServiceGateway,
+		App:          consts.AppName,
+		Service:      consts.ServiceGateway,
 		UDPAddress:   cfg.Logger.UDPAddress,
 		EnableCaller: cfg.Logger.EnableCaller,
-		Console:      cfg.System.Env != consts.EnvProd,
-		JSONOutput:   cfg.System.Env == consts.EnvProd,
+		Console:      cfg.System.Env != goconsts.EnvProd,
+		JSONOutput:   cfg.System.Env == goconsts.EnvProd,
 	}))
 
 	logger.Info().
 		Any(logkeys.Env, cfg.System.Env).
 		Str(logkeys.GitHash, CommitHash).
-		Msg("initializing gateway microservice")
+		Msg("initializing microservice")
 
 	appCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -66,7 +62,7 @@ func main() {
 
 	// Connecting to an external NATS cluster
 	busClient, err := bus.NewClient(
-		ServiceGateway,
+		consts.ServiceGateway,
 		cfg.Transport.Nats.URL,
 		cfg.Transport.Nats.StreamName,
 		logger.With(log.Str("component", "nats_client")),
@@ -95,8 +91,8 @@ func main() {
 	}
 
 	// 2. GATEWAY
-	gatewayCore := gateway.NewService(busClient, s3Adapter, logger.With(log.Str("module", "gateway")))
-	gatewayHandler := gatewayhttp.NewHandler(gatewayCore, logger.With(log.Str("module", "gateway_http")))
+	gatewayCore := gateway.NewService(busClient, s3Adapter, logger.With(log.Str("module", consts.ServiceGateway)))
+	gatewayHandler := gatewayhttp.NewHandler(gatewayCore, logger.With(log.Str("module", consts.ServiceGateway)))
 
 	// 3. TRANSPORT
 	mux := http.NewServeMux()
@@ -107,9 +103,9 @@ func main() {
 	supervisor := app.NewSupervisor(logger)
 	supervisor.Register(httpServer)
 
-	logger.Info().Msg("gateway service started successfully")
+	logger.Info().Msg("microservice started successfully")
 
 	if err := supervisor.Run(appCtx); err != nil && !errors.Is(err, context.Canceled) {
-		logger.Fatal().Err(err).Msg("gateway service terminated with error")
+		logger.Fatal().Err(err).Msg("microservice terminated with error")
 	}
 }

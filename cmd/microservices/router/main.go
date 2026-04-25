@@ -7,13 +7,14 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/shanth1/gotools/consts"
+	goconsts "github.com/shanth1/gotools/consts"
 	"github.com/shanth1/gotools/log"
 	"github.com/shanth1/gotools/logkeys"
 
 	"github.com/shanth1/morphic-monad/internal/app"
 	"github.com/shanth1/morphic-monad/internal/infra/bus"
 	"github.com/shanth1/morphic-monad/internal/infra/config"
+	"github.com/shanth1/morphic-monad/internal/pkg/consts"
 
 	"github.com/shanth1/morphic-monad/internal/modules/router"
 	"github.com/shanth1/morphic-monad/internal/modules/router/adapters/classifier"
@@ -22,11 +23,6 @@ import (
 var (
 	CommitHash = "n/a"
 	BuildTime  = "n/a"
-)
-
-const (
-	AppName       = "morphic-monad"
-	ServiceRouter = "router-svc"
 )
 
 func main() {
@@ -43,25 +39,25 @@ func main() {
 
 	logger := baseLogger.WithOptions(log.WithConfig(log.Config{
 		Level:        cfg.Logger.Level,
-		App:          AppName,
-		Service:      ServiceRouter,
+		App:          consts.AppName,
+		Service:      consts.ServiceRouter,
 		UDPAddress:   cfg.Logger.UDPAddress,
 		EnableCaller: cfg.Logger.EnableCaller,
-		Console:      cfg.System.Env != consts.EnvProd,
-		JSONOutput:   cfg.System.Env == consts.EnvProd,
+		Console:      cfg.System.Env != goconsts.EnvProd,
+		JSONOutput:   cfg.System.Env == goconsts.EnvProd,
 	}))
 
 	logger.Info().
 		Any(logkeys.Env, cfg.System.Env).
 		Str(logkeys.GitHash, CommitHash).
-		Msg("initializing router microservice")
+		Msg("initializing microservice")
 
 	appCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	// 1. INFRASTRUCTURE
 	busClient, err := bus.NewClient(
-		ServiceRouter,
+		consts.ServiceRouter,
 		cfg.Transport.Nats.URL,
 		cfg.Transport.Nats.StreamName,
 		logger.With(log.Str("component", "nats_client")),
@@ -85,15 +81,15 @@ func main() {
 		ruleEngine = classifier.NewStaticRuleEngine()
 	}
 
-	routerCore := router.NewService(busClient, busClient, ruleEngine, logger.With(log.Str("module", "router")))
+	routerCore := router.NewService(busClient, busClient, ruleEngine, logger.With(log.Str("module", consts.ServiceRouter)))
 
 	// 3. ORCHESTRATION
 	supervisor := app.NewSupervisor(logger)
 	supervisor.Register(routerCore)
 
-	logger.Info().Msg("router service started successfully")
+	logger.Info().Msg("microservice started successfully")
 
 	if err := supervisor.Run(appCtx); err != nil && !errors.Is(err, context.Canceled) {
-		logger.Fatal().Err(err).Msg("router service terminated with error")
+		logger.Fatal().Err(err).Msg("microservice terminated with error")
 	}
 }

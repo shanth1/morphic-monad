@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/shanth1/gotools/consts"
+	goconsts "github.com/shanth1/gotools/consts"
 	"github.com/shanth1/gotools/log"
 	"github.com/shanth1/gotools/logkeys"
 
@@ -17,6 +17,7 @@ import (
 	"github.com/shanth1/morphic-monad/internal/infra/bus"
 	"github.com/shanth1/morphic-monad/internal/infra/config"
 	infrahttp "github.com/shanth1/morphic-monad/internal/infra/http"
+	"github.com/shanth1/morphic-monad/internal/pkg/consts"
 
 	"github.com/shanth1/morphic-monad/internal/modules/gateway"
 	gatewayhttp "github.com/shanth1/morphic-monad/internal/modules/gateway/adapters/http"
@@ -27,11 +28,6 @@ import (
 var (
 	CommitHash = "n/a"
 	BuildTime  = "n/a"
-)
-
-const (
-	AppName         = "morphic-monad"
-	ServiceMonolith = "monolith"
 )
 
 // natsRunner adapts the built-in NATS server to the app.Runnable interface
@@ -58,12 +54,12 @@ func main() {
 
 	logger := baseLogger.WithOptions(log.WithConfig(log.Config{
 		Level:        cfg.Logger.Level,
-		App:          AppName,
-		Service:      ServiceMonolith,
+		App:          consts.AppName,
+		Service:      consts.ServiceMonolith,
 		UDPAddress:   cfg.Logger.UDPAddress,
 		EnableCaller: cfg.Logger.EnableCaller,
-		Console:      cfg.System.Env != consts.EnvProd,
-		JSONOutput:   cfg.System.Env == consts.EnvProd,
+		Console:      cfg.System.Env != goconsts.EnvProd,
+		JSONOutput:   cfg.System.Env == goconsts.EnvProd,
 	}))
 
 	logger.Info().
@@ -88,7 +84,7 @@ func main() {
 
 	// Single NATS Client for all modules
 	busClient, err := bus.NewClient(
-		ServiceMonolith,
+		consts.ServiceMonolith,
 		embeddedNats.URL(),
 		cfg.Transport.Nats.StreamName,
 		logger.With(log.Str("component", "nats_client")),
@@ -109,11 +105,11 @@ func main() {
 
 	// Gateway
 	gatewayCore := gateway.NewService(busClient, memoryBlobStore, logger.With(log.Str("module", "gateway")))
-	gatewayHandler := gatewayhttp.NewHandler(gatewayCore, logger.With(log.Str("module", "gateway_http")))
+	gatewayHandler := gatewayhttp.NewHandler(gatewayCore, logger.With(log.Str("module", consts.ServiceGateway)))
 
 	// Router
-	staticClassifier := classifier.NewStaticRuleEngine() // Стратегия маршрутизации
-	routerCore := router.NewService(busClient, busClient, staticClassifier, logger.With(log.Str("module", "router")))
+	staticClassifier := classifier.NewStaticRuleEngine()
+	routerCore := router.NewService(busClient, busClient, staticClassifier, logger.With(log.Str("module", consts.ServiceRouter)))
 
 	// 4. TRANSPORT (HTTP)
 	mux := http.NewServeMux()
