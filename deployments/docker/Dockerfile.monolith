@@ -1,21 +1,29 @@
+# Builder
 FROM golang:1.25-alpine AS builder
+
+ARG SERVICE_NAME
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 
 WORKDIR /app
 
+# Cache module loading
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o monolith ./cmd/monolith/main.go
+# Compile with optimizations (-s -w cuts out debug information)
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /bin/app ./cmd/microservices/${SERVICE_NAME}/main.go
 
-FROM alpine:latest
+# Final secure image
+FROM gcr.io/distroless/static-debian12:nonroot
 
+# Copying the binary from a non-root user
+COPY --from=builder --chown=nonroot:nonroot /bin/app /app/app
+COPY --from=builder --chown=nonroot:nonroot /app/config /app/config
+
+# Working in protected mode
+USER nonroot:nonroot
 WORKDIR /app
 
-COPY --from=builder /app/monolith .
-COPY --from=builder /app/config ./config
-
-ENV APP_ENV=local
-
-CMD ["./monolith"]
+CMD ["./app"]
