@@ -26,7 +26,7 @@ func NewService(sub EventSubscriber, pub EventPublisher, clf Classifier, l log.L
 }
 
 func (s *Service) Start(ctx context.Context) error {
-	err := s.subscriber.Subscribe(ctx, string(events.TopicIngress), events.QueueGroupRouter, s.handleEvent)
+	err := s.subscriber.Subscribe(ctx, events.TopicIngress, events.QueueGroupRouter, s.handleEvent)
 	if err != nil {
 		return fmt.Errorf("router subscribe: %w", err)
 	}

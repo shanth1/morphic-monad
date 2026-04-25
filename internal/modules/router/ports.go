@@ -14,7 +14,7 @@ type RouterService interface {
 type EventSubscriber interface {
 	// Subscribe subscribes to a topic within a consumer group (queueGroup)
 	// A queueGroup ensures that only one router instance processes a single message
-	Subscribe(ctx context.Context, topic string, queueGroup string, handler events.Handler) error
+	Subscribe(ctx context.Context, topic events.Topic, queueGroup string, handler events.Handler) error
 }
 
 // EventPublisher is the Driven Port for Router

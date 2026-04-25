@@ -73,10 +73,10 @@ func (c *Client) Publish(ctx context.Context, topic events.Topic, env *events.En
 	return nil
 }
 
-func (c *Client) Subscribe(ctx context.Context, topic string, queueGroup string, handler events.Handler) error {
+func (c *Client) Subscribe(ctx context.Context, topic events.Topic, queueGroup string, handler events.Handler) error {
 	consumer, err := c.js.CreateOrUpdateConsumer(ctx, c.streamName, jetstream.ConsumerConfig{
 		Durable:       queueGroup,
-		FilterSubject: topic,
+		FilterSubject: string(topic),
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		MaxDeliver:    5,
 		DeliverPolicy: jetstream.DeliverAllPolicy,
