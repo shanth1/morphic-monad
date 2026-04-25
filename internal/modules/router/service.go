@@ -8,7 +8,7 @@ import (
 	"github.com/shanth1/gotools/logkeys"
 	"github.com/shanth1/morphic-monad/internal/core/ports"
 	"github.com/shanth1/morphic-monad/internal/pkg/logmsg"
-	"github.com/shanth1/morphic-monad/pkg/envelope"
+	"github.com/shanth1/morphic-monad/pkg/events"
 )
 
 type Service struct {
@@ -34,7 +34,7 @@ func (s *Service) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) handleRawData(ctx context.Context, event *envelope.Envelope) error {
+func (s *Service) handleRawData(ctx context.Context, event *events.Envelope) error {
 	s.logger.Info().Str("event_id", event.ID).Str("tenant_id", event.TenantID).Str("type", event.Type).Msg("received event")
 
 	var data map[string]string
