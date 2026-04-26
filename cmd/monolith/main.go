@@ -149,8 +149,8 @@ func main() {
 	)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/ingest", gatewayHandler.HandleIngest)
-	mux.HandleFunc("/v1/search", gatewayHandler.HandleSearch)
+	mux.HandleFunc("/v1/ingest", gatewayhttp.MetricsMiddleware("/v1/ingest", gatewayHandler.HandleIngest))
+	mux.HandleFunc("/v1/search", gatewayhttp.MetricsMiddleware("/v1/search", gatewayHandler.HandleSearch))
 	mux.Handle("/metrics", promhttp.Handler())
 
 	httpServer := infrahttp.NewServer(

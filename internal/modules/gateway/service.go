@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shanth1/gotools/log"
+	"github.com/shanth1/morphic-monad/internal/infra/metrics"
 	"github.com/shanth1/morphic-monad/pkg/events"
 )
 
@@ -132,6 +133,8 @@ func (s *Service) IngestDocument(ctx context.Context, tenantID, contextText, fil
 		return "", fmt.Errorf("publish event: %w", err)
 	}
 
+	metrics.EventsPublishedTotal.WithLabelValues(string(events.TopicIngress), string(env.Type)).Inc()
+
 	s.logger.Info().Str("doc_id", docID).Msg("document ingested successfully")
 	return docID, nil
 }
@@ -150,7 +153,7 @@ func (s *Service) SearchDocuments(ctx context.Context, tenantID, queryText, blob
 		return nil, fmt.Errorf("create envelope: %w", err)
 	}
 
-	// 1. Create a channel and register it in the Reply Router
+	// Create a channel and register it in the Reply Router
 	replyCh := make(chan *events.Envelope, 1)
 	s.mu.Lock()
 	s.pendingReqs[correlationID] = replyCh
@@ -164,12 +167,14 @@ func (s *Service) SearchDocuments(ctx context.Context, tenantID, queryText, blob
 		close(replyCh)
 	}()
 
-	// 2. Publish search request to the bus
+	// Publish search request to the bus
 	if err := s.publisher.Publish(ctx, events.TopicIngress, env); err != nil {
 		return nil, fmt.Errorf("publish search event: %w", err)
 	}
 
-	// 3. Wait for the reply with a timeout (e.g., 10 seconds)
+	metrics.EventsPublishedTotal.WithLabelValues(string(events.TopicIngress), string(env.Type)).Inc()
+
+	// Wait for the reply with a timeout (e.g., 10 seconds)
 	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -178,7 +183,7 @@ func (s *Service) SearchDocuments(ctx context.Context, tenantID, queryText, blob
 		return nil, fmt.Errorf("search request timeout")
 
 	case replyEnv := <-replyCh:
-		// 4. Reply received! Decode and return.
+		// Reply received! Decode and return.
 		var resultPayload events.SearchCompletedPayload
 		if err := replyEnv.DecodeData(&resultPayload); err != nil {
 			return nil, fmt.Errorf("decode search reply: %w", err)

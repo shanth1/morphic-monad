@@ -3,8 +3,10 @@ package engine
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/shanth1/gotools/log"
+	"github.com/shanth1/morphic-monad/internal/infra/metrics"
 	"github.com/shanth1/morphic-monad/internal/infra/pkg/domain"
 	"github.com/shanth1/morphic-monad/pkg/events"
 )
@@ -68,6 +70,7 @@ func (s *Service) handleTask(ctx context.Context, msg events.Message) error {
 
 // handleUpsert saves all document chunks to the VectorDB
 func (s *Service) handleUpsert(ctx context.Context, tenantID domain.TenantID, payload events.EmbedCompletedPayload, msg events.Message) error {
+	start := time.Now()
 	docID := domain.DocumentID(payload.DocumentID)
 
 	for _, chunk := range payload.Chunks {
@@ -81,12 +84,18 @@ func (s *Service) handleUpsert(ctx context.Context, tenantID domain.TenantID, pa
 		}
 	}
 
+	duration := time.Since(start).Seconds()
+	metrics.WorkerProcessingTime.WithLabelValues("engine", "upsert").Observe(duration)
+	metrics.VectorsUpsertedTotal.Add(float64(len(payload.Chunks)))
+
 	s.logger.Info().Str("doc_id", string(docID)).Int("chunks", len(payload.Chunks)).Msg("document vectors saved to DB")
 	return msg.Ack()
 }
 
 // handleSearch finds nearest vectors and sends results back to the request initiator
 func (s *Service) handleSearch(ctx context.Context, tenantID domain.TenantID, correlationID string, payload events.EmbedCompletedPayload, msg events.Message) error {
+	start := time.Now()
+
 	if len(payload.Chunks) == 0 {
 		s.logger.Warn().Msg("search payload contains no vectors")
 		return msg.Term()
@@ -132,6 +141,9 @@ func (s *Service) handleSearch(ctx context.Context, tenantID domain.TenantID, co
 		s.logger.Error().Err(err).Msg("failed to publish search results")
 		return msg.Nack()
 	}
+
+	duration := time.Since(start).Seconds()
+	metrics.WorkerProcessingTime.WithLabelValues("engine", "search").Observe(duration)
 
 	s.logger.Info().Str("correlation_id", correlationID).Int("hits", len(finalResults)).Msg("search completed successfully")
 	return msg.Ack()

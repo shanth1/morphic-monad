@@ -56,7 +56,7 @@ func (s *Service) handleTask(ctx context.Context, msg events.Message) error {
 	var textToEmbed string
 	var documentID domain.DocumentID
 
-	// 1. Decode payload based on the original event type
+	// Decode payload based on the original event type
 	switch env.Type {
 	case events.EventIngestRequested:
 		var payload events.IngestPayload
@@ -94,11 +94,11 @@ func (s *Service) handleTask(ctx context.Context, msg events.Message) error {
 		return msg.Ack()
 	}
 
-	// 2. Vectorize content (Mock implementation)
+	// Vectorize content (Mock implementation)
 	chunkVector := s.mockVectorize(textToEmbed)
 	chunkID := domain.ChunkID(uuid.NewString())
 
-	// 3. Prepare resulting chunks (1-to-1 mapping for MVP, 1-to-N in real scenarios)
+	// Prepare resulting chunks (1-to-1 mapping for MVP, 1-to-N in real scenarios)
 	chunks := []events.Chunk{
 		{
 			ChunkID: string(chunkID), // Type casting domain.ID -> string
@@ -106,7 +106,7 @@ func (s *Service) handleTask(ctx context.Context, msg events.Message) error {
 		},
 	}
 
-	// 4. Form the response payload, preserving the OriginalType
+	// Form the response payload, preserving the OriginalType
 	resultPayload := events.EmbedCompletedPayload{
 		DocumentID:   string(documentID), // Type casting domain.ID -> string
 		Chunks:       chunks,
@@ -118,14 +118,13 @@ func (s *Service) handleTask(ctx context.Context, msg events.Message) error {
 		return msg.Nack()
 	}
 
-	// 5. Publish to Ingress (Router will route it to Engine)
+	// Publish to Ingress (Router will route it to Engine)
 	if err := s.publisher.Publish(ctx, events.TopicIngress, resultEnv); err != nil {
 		return msg.Nack()
 	}
 
 	duration := time.Since(start).Seconds()
-	metrics.EventProcessingDuration.WithLabelValues("embedder", string(env.Type)).Observe(duration)
-	metrics.ChunksProcessedTotal.Add(float64(len(chunks)))
+	metrics.WorkerProcessingTime.WithLabelValues("embedder", "vectorize").Observe(duration)
 
 	s.logger.Info().Str("correlation_id", env.CorrelationID).Msg("vectorization completed")
 
