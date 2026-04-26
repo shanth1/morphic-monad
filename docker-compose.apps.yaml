@@ -31,3 +31,16 @@ services:
     depends_on:
       nats:
         condition: service_healthy
+
+  engine:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.microservice
+      args:
+        SERVICE_NAME: engine
+    environment:
+      - APP_ENV=local
+      - NATS_URL=nats://nats:4222
+    depends_on:
+      nats:
+        condition: service_healthy
