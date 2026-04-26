@@ -1,8 +1,19 @@
 package consts
 
 const (
-	AppName         string = "morphic-monad"
+	AppName string = "morphic-monad"
+
 	ServiceMonolith string = "monolith"
-	ServiceRouter   string = "router"
-	ServiceGateway  string = "gateway"
+
+	// Main Modules
+	ServiceGateway string = "gateway"
+	ServiceRouter  string = "router"
+	ServiceEngine  string = "engine"
+
+	// Workers
+	ServiceEmbedder string = "embedder"
+
+	// Components
+	ComponentNATSClient = "nats_client"
+	ComponentHTTPServer = "http_server"
 )

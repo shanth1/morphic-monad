@@ -15,6 +15,7 @@ import (
 	"github.com/shanth1/morphic-monad/internal/infra/bus"
 	"github.com/shanth1/morphic-monad/internal/infra/config"
 	"github.com/shanth1/morphic-monad/internal/pkg/consts"
+	"github.com/shanth1/morphic-monad/internal/pkg/logmsg"
 
 	"github.com/shanth1/morphic-monad/internal/modules/router"
 	"github.com/shanth1/morphic-monad/internal/modules/router/adapters/classifier"
@@ -30,11 +31,11 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		baseLogger.Fatal().Err(err).Msg("failed to load configuration")
+		baseLogger.Fatal().Err(err).Msg(logmsg.LoadConfigFailed)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		baseLogger.Fatal().Err(err).Msg("configuration validation failed")
+		baseLogger.Fatal().Err(err).Msg(logmsg.ValidatingConfigFailed)
 	}
 
 	logger := baseLogger.WithOptions(log.WithConfig(log.Config{
@@ -50,46 +51,48 @@ func main() {
 	logger.Info().
 		Any(logkeys.Env, cfg.System.Env).
 		Str(logkeys.GitHash, CommitHash).
-		Msg("initializing microservice")
+		Msg(logmsg.AppInitializing)
 
 	appCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// 1. INFRASTRUCTURE
+	// --- Infrastructure ---
+
 	busClient, err := bus.NewClient(
 		consts.ServiceRouter,
 		cfg.Transport.Nats.URL,
 		cfg.Transport.Nats.StreamName,
-		logger.With(log.Str("component", "nats_client")),
+		logger.With(log.Str("component", consts.ComponentNATSClient)),
 	)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to connect to external NATS")
+		logger.Fatal().Err(err).Msg(logmsg.BusConnectionFailed)
 	}
 	defer busClient.Close()
 
 	if err := busClient.InitStream(appCtx); err != nil {
-		logger.Fatal().Err(err).Msg("failed to init JetStream stream")
+		logger.Fatal().Err(err).Msg(logmsg.InitBusStreamFailed)
 	}
 
-	// 2. ROUTER
-	// Selecting a strategy based on the configuration
 	var ruleEngine router.Classifier
 	if cfg.Modules.Router.Strategy == "static" {
 		ruleEngine = classifier.NewStaticRuleEngine() // TODO: cfg.Modules.Router.StaticRules
 	} else {
-		// LLM Router
-		ruleEngine = classifier.NewStaticRuleEngine()
+		logger.Fatal().Err(err).Str("router", cfg.Modules.Router.Strategy).Msg("unsupporter router")
 	}
 
-	routerCore := router.NewService(busClient, busClient, ruleEngine, logger.With(log.Str("module", consts.ServiceRouter)))
+	routerCore := router.NewService(
+		busClient,
+		busClient,
+		ruleEngine,
+		logger.With(log.Str("module", consts.ServiceRouter)),
+	)
 
-	// 3. ORCHESTRATION
 	supervisor := app.NewSupervisor(logger)
 	supervisor.Register(routerCore)
 
-	logger.Info().Msg("microservice started successfully")
+	logger.Info().Msg(logmsg.AppStarting)
 
 	if err := supervisor.Run(appCtx); err != nil && !errors.Is(err, context.Canceled) {
-		logger.Fatal().Err(err).Msg("microservice terminated with error")
+		logger.Fatal().Err(err).Msg(logmsg.AppRuntimeError)
 	}
 }

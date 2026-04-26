@@ -17,6 +17,7 @@ import (
 	"github.com/shanth1/morphic-monad/internal/infra/config"
 	infrahttp "github.com/shanth1/morphic-monad/internal/infra/http"
 	"github.com/shanth1/morphic-monad/internal/pkg/consts"
+	"github.com/shanth1/morphic-monad/internal/pkg/logmsg"
 
 	"github.com/shanth1/morphic-monad/internal/modules/gateway"
 	gatewayhttp "github.com/shanth1/morphic-monad/internal/modules/gateway/adapters/http"
@@ -33,11 +34,11 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		baseLogger.Fatal().Err(err).Msg("failed to load configuration")
+		baseLogger.Fatal().Err(err).Msg(logmsg.LoadConfigFailed)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		baseLogger.Fatal().Err(err).Msg("configuration validation failed")
+		baseLogger.Fatal().Err(err).Msg(logmsg.ValidatingConfigFailed)
 	}
 
 	logger := baseLogger.WithOptions(log.WithConfig(log.Config{
@@ -53,27 +54,27 @@ func main() {
 	logger.Info().
 		Any(logkeys.Env, cfg.System.Env).
 		Str(logkeys.GitHash, CommitHash).
-		Msg("initializing microservice")
+		Msg(logmsg.AppInitializing)
 
 	appCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// 1. INFRASTRUCTURE
+	// --- Infrastructure ---
 
 	// Connecting to an external NATS cluster
 	busClient, err := bus.NewClient(
 		consts.ServiceGateway,
 		cfg.Transport.Nats.URL,
 		cfg.Transport.Nats.StreamName,
-		logger.With(log.Str("component", "nats_client")),
+		logger.With(log.Str("component", consts.ComponentNATSClient)),
 	)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to connect to external NATS")
+		logger.Fatal().Err(err).Msg(logmsg.BusConnectionFailed)
 	}
 	defer busClient.Close()
 
 	if err := busClient.InitStream(appCtx); err != nil {
-		logger.Fatal().Err(err).Msg("failed to init JetStream stream")
+		logger.Fatal().Err(err).Msg(logmsg.InitBusStreamFailed)
 	}
 
 	// Connecting to external AWS S3 / LocalStack
@@ -90,22 +91,33 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to initialize S3 adapter")
 	}
 
-	// 2. GATEWAY
-	gatewayCore := gateway.NewService(busClient, busClient, s3Adapter, logger.With(log.Str("module", consts.ServiceGateway)))
-	gatewayHandler := gatewayhttp.NewHandler(gatewayCore, logger.With(log.Str("module", consts.ServiceGateway)))
+	gatewayCore := gateway.NewService(
+		busClient,
+		busClient,
+		s3Adapter,
+		logger.With(log.Str("module", consts.ServiceGateway)),
+	)
 
-	// 3. TRANSPORT
+	gatewayHandler := gatewayhttp.NewHandler(
+		gatewayCore,
+		logger.With(log.Str("module", consts.ServiceGateway)),
+	)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/ingest", gatewayHandler.HandleIngest)
-	httpServer := infrahttp.NewServer(cfg.Modules.Gateway.Port, mux, logger.With(log.Str("component", "http_server")))
+	mux.HandleFunc("/v1/search", gatewayHandler.HandleSearch)
+	httpServer := infrahttp.NewServer(
+		cfg.Modules.Gateway.Port,
+		mux,
+		logger.With(log.Str("component", consts.ComponentHTTPServer)),
+	)
 
-	// 4. ORCHESTRATION
 	supervisor := app.NewSupervisor(logger)
 	supervisor.Register(httpServer)
 
-	logger.Info().Msg("microservice started successfully")
+	logger.Info().Msg(logmsg.AppInitializing)
 
 	if err := supervisor.Run(appCtx); err != nil && !errors.Is(err, context.Canceled) {
-		logger.Fatal().Err(err).Msg("microservice terminated with error")
+		logger.Fatal().Err(err).Msg(logmsg.AppRuntimeError)
 	}
 }

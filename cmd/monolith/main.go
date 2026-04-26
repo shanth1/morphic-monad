@@ -19,6 +19,7 @@ import (
 	infrahttp "github.com/shanth1/morphic-monad/internal/infra/http"
 	"github.com/shanth1/morphic-monad/internal/infra/vectordb"
 	"github.com/shanth1/morphic-monad/internal/pkg/consts"
+	"github.com/shanth1/morphic-monad/internal/pkg/logmsg"
 
 	"github.com/shanth1/morphic-monad/internal/modules/engine"
 	"github.com/shanth1/morphic-monad/internal/modules/gateway"
@@ -43,16 +44,15 @@ func (n *natsRunner) Start(ctx context.Context) error {
 }
 
 func main() {
-	// 1. INITIALIZATION
 	baseLogger := log.New()
 
 	cfg, err := config.Load()
 	if err != nil {
-		baseLogger.Fatal().Err(err).Msg("failed to load configuration")
+		baseLogger.Fatal().Err(err).Msg(logmsg.LoadConfigFailed)
 	}
 
 	if err := cfg.Validate(); err != nil {
-		baseLogger.Fatal().Err(err).Msg("configuration validation failed")
+		baseLogger.Fatal().Err(err).Msg(logmsg.ValidatingConfigFailed)
 	}
 
 	logger := baseLogger.WithOptions(log.WithConfig(log.Config{
@@ -68,13 +68,13 @@ func main() {
 	logger.Info().
 		Any(logkeys.Env, cfg.System.Env).
 		Str(logkeys.GitHash, CommitHash).
-		Str("build_time", BuildTime).
-		Msg("initializing monolith application")
+		Str(logkeys.BuildTime, BuildTime).
+		Msg(logmsg.AppInitializing)
 
 	appCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// 2. INFRASTRUCTURE (IN-MEMORY ADAPTERS)
+	// --- Infrastructure ---
 
 	// Built-in NATS Server
 	embeddedNats, err := bus.NewServer(logger.With(log.Str("component", "nats_server")))
@@ -82,7 +82,7 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to initialize embedded NATS server")
 	}
 	if err := embeddedNats.Start(); err != nil {
-		logger.Fatal().Err(err).Msg("failed to start embedded NATS server")
+		logger.Fatal().Err(err).Msg(logmsg.InitBusFailed)
 	}
 
 	// Single NATS Client for all modules
@@ -90,50 +90,71 @@ func main() {
 		consts.ServiceMonolith,
 		embeddedNats.URL(),
 		cfg.Transport.Nats.StreamName,
-		logger.With(log.Str("component", "nats_client")),
+		logger.With(log.Str("component", consts.ComponentNATSClient)),
 	)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to connect to NATS")
+		logger.Fatal().Err(err).Msg(logmsg.BusConnectionFailed)
 	}
 	defer busClient.Close()
 
 	if err := busClient.InitStream(appCtx); err != nil {
-		logger.Fatal().Err(err).Msg("failed to init JetStream stream")
+		logger.Fatal().Err(err).Msg(logmsg.InitBusStreamFailed)
 	}
 
-	// In-Memory Blob Store (replaces S3)
+	// In-Memory Blob Store
 	memoryBlobStore := blob.NewMemoryStorage()
+
+	// In-Memory VectorDB
 	memoryVectorDB := vectordb.NewMemoryVectorDB()
 
-	// 3. MODULES
+	// --- Core Modules ---
 
-	embedderCore := embedder.NewService(
+	engineCore := engine.NewService(
+		busClient,
+		busClient,
+		memoryVectorDB,
+		logger.With(log.Str("module", consts.ServiceEngine)),
+	)
+
+	gatewayCore := gateway.NewService(
+		busClient,
+		busClient,
+		memoryBlobStore,
+		logger.With(log.Str("module", consts.ServiceGateway)),
+	)
+
+	staticClassifier := classifier.NewStaticRuleEngine()
+	routerCore := router.NewService(
+		busClient,
+		busClient,
+		staticClassifier,
+		logger.With(log.Str("module", consts.ServiceRouter)),
+	)
+
+	// --- Worker Modules ---
+
+	embeddedWorker := embedder.NewService(
 		busClient,       // EventSubscriber
 		busClient,       // EventPublisher
 		memoryBlobStore, // BlobReader
-		logger.With(log.Str("module", "embedder")),
+		logger.With(log.Str("module", consts.ServiceEmbedder)),
 	)
 
-	engineCore := engine.NewService(
-		busClient,      // EventSubscriber
-		busClient,      // EventPublisher
-		memoryVectorDB, // VectorDB
-		logger.With(log.Str("module", "engine")),
+	// --- Transport ---
+
+	gatewayHandler := gatewayhttp.NewHandler(
+		gatewayCore,
+		logger.With(log.Str("module", consts.ServiceGateway)),
 	)
 
-	// Gateway
-	gatewayCore := gateway.NewService(busClient, busClient, memoryBlobStore, logger.With(log.Str("module", "gateway")))
-	gatewayHandler := gatewayhttp.NewHandler(gatewayCore, logger.With(log.Str("module", consts.ServiceGateway)))
-
-	// Router
-	staticClassifier := classifier.NewStaticRuleEngine()
-	routerCore := router.NewService(busClient, busClient, staticClassifier, logger.With(log.Str("module", consts.ServiceRouter)))
-
-	// 4. TRANSPORT (HTTP)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/ingest", gatewayHandler.HandleIngest)
 	mux.HandleFunc("/v1/search", gatewayHandler.HandleSearch)
-	httpServer := infrahttp.NewServer(cfg.Modules.Gateway.Port, mux, logger.With(log.Str("component", "http_server")))
+	httpServer := infrahttp.NewServer(
+		cfg.Modules.Gateway.Port,
+		mux,
+		logger.With(log.Str("component", consts.ComponentHTTPServer)),
+	)
 
 	supervisor := app.NewSupervisor(logger)
 	supervisor.Register(
@@ -141,13 +162,13 @@ func main() {
 		httpServer,
 		routerCore,
 		gatewayCore,
-		embedderCore,
 		engineCore,
+		embeddedWorker,
 	)
 
-	logger.Info().Msg("platform started successfully")
+	logger.Info().Msg(logmsg.AppStarting)
 
 	if err := supervisor.Run(appCtx); err != nil && !errors.Is(err, context.Canceled) {
-		logger.Fatal().Err(err).Msg("platform terminated with error")
+		logger.Fatal().Err(err).Msg(logmsg.AppRuntimeError)
 	}
 }
