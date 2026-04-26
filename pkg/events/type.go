@@ -4,10 +4,10 @@ type EventType string
 
 const (
 	// --- Ingestion & Claim Check ---
-	EventDocumentUploaded EventType = "document.uploaded"
+	EventIngestRequested EventType = "data.ingest.requested"
 
 	// --- Search ---
-	EventSearchRequested EventType = "document.search.requested"
+	EventSearchRequested EventType = "data.search.requested"
 
 	// --- Workers: Embeddings & VectorDB ---
 	EventTaskEmbedCompleted EventType = "task.embed.completed"

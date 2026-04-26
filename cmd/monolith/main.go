@@ -104,7 +104,7 @@ func main() {
 	// 3. MODULES
 
 	// Gateway
-	gatewayCore := gateway.NewService(busClient, memoryBlobStore, logger.With(log.Str("module", "gateway")))
+	gatewayCore := gateway.NewService(busClient, busClient, memoryBlobStore, logger.With(log.Str("module", "gateway")))
 	gatewayHandler := gatewayhttp.NewHandler(gatewayCore, logger.With(log.Str("module", consts.ServiceGateway)))
 
 	// Router

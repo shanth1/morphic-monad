@@ -2,17 +2,9 @@ package engine
 
 import "github.com/shanth1/morphic-monad/internal/infra/pkg/domain"
 
-// SearchQuery is an internal business model for searching queries within Engine.
-type SearchQuery struct {
-	QueryText string
-	TopK      int
-	Filters   map[string]string
-}
-
-// Chunk represents a fragment of text to be vectorized.
-type Chunk struct {
-	ChunkID    domain.DocumentID
+// SearchResult represents one document found.
+type SearchResult struct {
 	DocumentID domain.DocumentID
-	Text       string
-	Metadata   map[string]string
+	ChunkID    domain.ChunkID
+	Score      float32 // From 0.0 to 1.0 (the closer to 1, the more similar)
 }

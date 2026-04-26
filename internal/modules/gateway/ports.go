@@ -7,13 +7,19 @@ import (
 	"github.com/shanth1/morphic-monad/pkg/events"
 )
 
-type IngestService interface {
-	IngestDocument(ctx context.Context, tenantID, filename, mimeType string, size int64, fileReader io.Reader) (string, error)
+// EventSubscriber - the port for NATS listening
+type EventSubscriber interface {
+	Subscribe(ctx context.Context, topic events.Topic, queueGroup string, handler events.Handler) error
 }
 
 // EventPublisher is the Driven Port for Gateway
 type EventPublisher interface {
 	Publish(ctx context.Context, topic events.Topic, env *events.Envelope) error
+}
+
+type GatewayService interface {
+	IngestDocument(ctx context.Context, tenantID, contextText, filename, mimeType string, size int64, fileReader io.Reader) (string, error)
+	SearchDocuments(ctx context.Context, tenantID, queryText, blobURI string, topK int) ([]events.SearchResult, error)
 }
 
 // BlobStore is an outgoing port for storing heavy files (Claim Check)

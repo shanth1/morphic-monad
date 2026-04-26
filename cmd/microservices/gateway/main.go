@@ -91,7 +91,7 @@ func main() {
 	}
 
 	// 2. GATEWAY
-	gatewayCore := gateway.NewService(busClient, s3Adapter, logger.With(log.Str("module", consts.ServiceGateway)))
+	gatewayCore := gateway.NewService(busClient, busClient, s3Adapter, logger.With(log.Str("module", consts.ServiceGateway)))
 	gatewayHandler := gatewayhttp.NewHandler(gatewayCore, logger.With(log.Str("module", consts.ServiceGateway)))
 
 	// 3. TRANSPORT

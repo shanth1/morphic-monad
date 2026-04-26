@@ -17,20 +17,24 @@ var (
 	ErrVectorMismatch = errors.New("vector dimensions mismatch")
 )
 
+type chunkRecord struct {
+	DocID  domain.DocumentID
+	Vector domain.Vector
+}
+
 type MemoryVectorDB struct {
-	mu sync.RWMutex
-	// store: TenantID -> DocumentID -> Vector
-	store map[domain.TenantID]map[domain.DocumentID]domain.Vector
+	mu    sync.RWMutex
+	store map[domain.TenantID]map[domain.ChunkID]chunkRecord
 }
 
 func NewMemoryVectorDB() *MemoryVectorDB {
 	return &MemoryVectorDB{
-		store: make(map[domain.TenantID]map[domain.DocumentID]domain.Vector),
+		store: make(map[domain.TenantID]map[domain.ChunkID]chunkRecord),
 	}
 }
 
 // Upsert saves or updates a document vector for a specific tenant.
-func (db *MemoryVectorDB) Upsert(ctx context.Context, tenantID domain.TenantID, docID domain.DocumentID, vector domain.Vector) error {
+func (db *MemoryVectorDB) Upsert(ctx context.Context, tenantID domain.TenantID, docID domain.DocumentID, chunkID domain.ChunkID, vector domain.Vector) error {
 	if tenantID == "" {
 		return ErrEmptyTenant
 	}
@@ -42,10 +46,10 @@ func (db *MemoryVectorDB) Upsert(ctx context.Context, tenantID domain.TenantID, 
 	defer db.mu.Unlock()
 
 	if _, exists := db.store[tenantID]; !exists {
-		db.store[tenantID] = make(map[domain.DocumentID]domain.Vector)
+		db.store[tenantID] = make(map[domain.ChunkID]chunkRecord)
 	}
 
-	db.store[tenantID][docID] = vector
+	db.store[tenantID][chunkID] = chunkRecord{DocID: docID, Vector: vector}
 	return nil
 }
 
@@ -59,28 +63,28 @@ func (db *MemoryVectorDB) Search(ctx context.Context, tenantID domain.TenantID, 
 	}
 
 	db.mu.RLock()
-	tenantDocs, exists := db.store[tenantID]
+	tenantChunks, exists := db.store[tenantID]
 	db.mu.RUnlock()
 
-	if !exists || len(tenantDocs) == 0 {
+	if !exists || len(tenantChunks) == 0 {
 		return []engine.SearchResult{}, nil
 	}
 
 	var results []engine.SearchResult
 
-	for docID, docVector := range tenantDocs {
-		if len(docVector) != len(queryVector) {
+	for chunkID, record := range tenantChunks {
+		if len(record.Vector) != len(queryVector) {
 			continue
 		}
 
-		score := cosineSimilarity(queryVector, docVector)
+		score := cosineSimilarity(queryVector, record.Vector)
 		results = append(results, engine.SearchResult{
-			DocumentID: docID,
+			DocumentID: record.DocID,
+			ChunkID:    chunkID,
 			Score:      score,
 		})
 	}
 
-	// Sort the results in descending order by Score (most relevant on top)
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].Score > results[j].Score
 	})

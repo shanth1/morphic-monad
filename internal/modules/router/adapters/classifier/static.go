@@ -18,11 +18,12 @@ func NewStaticRuleEngine() *StaticRuleEngine {
 
 func (c *StaticRuleEngine) Classify(ctx context.Context, env *events.Envelope) (events.Topic, error) {
 	switch env.Type {
-	// Both new documents and search queries require vectorization.
-	case events.EventDocumentUploaded, events.EventSearchRequested:
+
+	// Both new data (Ingest) and search queries (Search) are sent to vectorization
+	case events.EventIngestRequested, events.EventSearchRequested:
 		return events.TopicTaskEmbed, nil
 
-	// Vectorization results always go to the Engine (it will decide for itself whether to save or search)
+	// Vectorization results always go to Engine
 	case events.EventTaskEmbedCompleted:
 		return events.TopicTaskEngine, nil
 
