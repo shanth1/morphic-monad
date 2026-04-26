@@ -132,6 +132,7 @@ func main() {
 	// 4. TRANSPORT (HTTP)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/ingest", gatewayHandler.HandleIngest)
+	mux.HandleFunc("/v1/search", gatewayHandler.HandleSearch)
 	httpServer := infrahttp.NewServer(cfg.Modules.Gateway.Port, mux, logger.With(log.Str("component", "http_server")))
 
 	supervisor := app.NewSupervisor(logger)
@@ -139,6 +140,7 @@ func main() {
 		&natsRunner{srv: embeddedNats},
 		httpServer,
 		routerCore,
+		gatewayCore,
 		embedderCore,
 		engineCore,
 	)
