@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shanth1/gotools/log"
+	"github.com/shanth1/morphic-monad/internal/infra/metrics"
 	"github.com/shanth1/morphic-monad/internal/infra/pkg/domain"
 	"github.com/shanth1/morphic-monad/pkg/events"
 )
@@ -48,6 +50,7 @@ func (s *Service) Start(ctx context.Context) error {
 }
 
 func (s *Service) handleTask(ctx context.Context, msg events.Message) error {
+	start := time.Now()
 	env := msg.Envelope()
 
 	var textToEmbed string
@@ -120,7 +123,12 @@ func (s *Service) handleTask(ctx context.Context, msg events.Message) error {
 		return msg.Nack()
 	}
 
+	duration := time.Since(start).Seconds()
+	metrics.EventProcessingDuration.WithLabelValues("embedder", string(env.Type)).Observe(duration)
+	metrics.ChunksProcessedTotal.Add(float64(len(chunks)))
+
 	s.logger.Info().Str("correlation_id", env.CorrelationID).Msg("vectorization completed")
+
 	return msg.Ack()
 }
 
@@ -146,7 +154,7 @@ func (s *Service) mockVectorize(text string) []float32 {
 	rng := rand.New(rand.NewSource(seed))
 
 	vector := make([]float32, MockVectorDimension)
-	for i := 0; i < MockVectorDimension; i++ {
+	for i := range MockVectorDimension {
 		vector[i] = rng.Float32()
 	}
 	return vector
