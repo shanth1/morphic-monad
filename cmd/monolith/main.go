@@ -17,12 +17,15 @@ import (
 	"github.com/shanth1/morphic-monad/internal/infra/bus"
 	"github.com/shanth1/morphic-monad/internal/infra/config"
 	infrahttp "github.com/shanth1/morphic-monad/internal/infra/http"
+	"github.com/shanth1/morphic-monad/internal/infra/vectordb"
 	"github.com/shanth1/morphic-monad/internal/pkg/consts"
 
+	"github.com/shanth1/morphic-monad/internal/modules/engine"
 	"github.com/shanth1/morphic-monad/internal/modules/gateway"
 	gatewayhttp "github.com/shanth1/morphic-monad/internal/modules/gateway/adapters/http"
 	"github.com/shanth1/morphic-monad/internal/modules/router"
 	"github.com/shanth1/morphic-monad/internal/modules/router/adapters/classifier"
+	"github.com/shanth1/morphic-monad/internal/modules/workers/embedder"
 )
 
 var (
@@ -100,8 +103,23 @@ func main() {
 
 	// In-Memory Blob Store (replaces S3)
 	memoryBlobStore := blob.NewMemoryStorage()
+	memoryVectorDB := vectordb.NewMemoryVectorDB()
 
 	// 3. MODULES
+
+	embedderCore := embedder.NewService(
+		busClient,       // EventSubscriber
+		busClient,       // EventPublisher
+		memoryBlobStore, // BlobReader
+		logger.With(log.Str("module", "embedder")),
+	)
+
+	engineCore := engine.NewService(
+		busClient,      // EventSubscriber
+		busClient,      // EventPublisher
+		memoryVectorDB, // VectorDB
+		logger.With(log.Str("module", "engine")),
+	)
 
 	// Gateway
 	gatewayCore := gateway.NewService(busClient, busClient, memoryBlobStore, logger.With(log.Str("module", "gateway")))
@@ -116,12 +134,13 @@ func main() {
 	mux.HandleFunc("/v1/ingest", gatewayHandler.HandleIngest)
 	httpServer := infrahttp.NewServer(cfg.Modules.Gateway.Port, mux, logger.With(log.Str("component", "http_server")))
 
-	// 5. СУПЕРВИЗОР
 	supervisor := app.NewSupervisor(logger)
 	supervisor.Register(
 		&natsRunner{srv: embeddedNats},
 		httpServer,
 		routerCore,
+		embedderCore,
+		engineCore,
 	)
 
 	logger.Info().Msg("platform started successfully")
