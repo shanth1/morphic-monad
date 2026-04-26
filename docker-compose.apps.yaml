@@ -44,3 +44,16 @@ services:
     depends_on:
       nats:
         condition: service_healthy
+
+  embedder:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.microservice
+      args:
+        SERVICE_NAME: embedder
+    environment:
+      - APP_ENV=local
+      - NATS_URL=nats://nats:4222
+    depends_on:
+      nats:
+        condition: service_healthy

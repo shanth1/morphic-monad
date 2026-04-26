@@ -6,6 +6,7 @@ CMD_MONO_PATH := ./cmd/monolith/main.go
 CMD_GW_PATH := ./cmd/microservices/gateway/main.go
 CMD_ROUTER_PATH := ./cmd/microservices/router/main.go
 CMD_ENGINE_PATH := ./cmd/microservices/engine/main.go
+CMD_EMBEDDER_PATH := ./cmd/microservices/embedder/main.go
 
 # --- Build Variables ---
 COMMIT_HASH := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
@@ -56,6 +57,10 @@ run-engine: ## Run ONLY the Engine microservice
 	@echo "🚀 Starting Engine Microservice..."
 	@APP_ENV=local go run $(LDFLAGS) $(CMD_ENGINE_PATH) --env=local
 
+run-embedder: ## Run ONLY the Embedder microservice
+	@echo "🚀 Starting Embedder Microservice..."
+	@APP_ENV=local go run $(LDFLAGS) $(CMD_EMBEDDER_PATH) --env=local
+
 ##@ Build & Quality
 
 build-mono: clean ## Build the monolith binary
@@ -67,6 +72,7 @@ build-micro: clean ## Build microservices binaries
 	@CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_DIR)/gateway $(CMD_GW_PATH)
 	@CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_DIR)/router $(CMD_ROUTER_PATH)
 	@CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_DIR)/router $(CMD_ENGINE_PATH)
+	@CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_DIR)/router $(CMD_EMBEDDER_PATH)
 
 test: ## Run unit tests with race detector
 	@go test -v -race ./...
