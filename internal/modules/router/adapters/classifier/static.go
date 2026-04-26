@@ -9,10 +9,8 @@ import (
 
 var ErrNoRouteFound = errors.New("no routing rule found for this event")
 
-// StaticRuleEngine implements the router.Classifier port based on hard-coded (or config-loaded) rules
-type StaticRuleEngine struct {
-	// In the future, you can pass map[events.EventType]events.Topic here, assembled from yaml
-}
+// StaticRuleEngine implements the router.Classifier port
+type StaticRuleEngine struct{}
 
 func NewStaticRuleEngine() *StaticRuleEngine {
 	return &StaticRuleEngine{}
@@ -20,12 +18,13 @@ func NewStaticRuleEngine() *StaticRuleEngine {
 
 func (c *StaticRuleEngine) Classify(ctx context.Context, env *events.Envelope) (events.Topic, error) {
 	switch env.Type {
-
-	case events.EventDocumentUploaded:
-		return events.TopicTaskOCR, nil
-
-	case events.EventTaskOCRCompleted:
+	// Both new documents and search queries require vectorization.
+	case events.EventDocumentUploaded, events.EventSearchRequested:
 		return events.TopicTaskEmbed, nil
+
+	// Vectorization results always go to the Engine (it will decide for itself whether to save or search)
+	case events.EventTaskEmbedCompleted:
+		return events.TopicTaskEngine, nil
 
 	default:
 		return "", ErrNoRouteFound
