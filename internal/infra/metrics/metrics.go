@@ -22,7 +22,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "morphic_http_response_time_seconds",
 			Help:    "Duration of HTTP requests",
-			Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}, // From 10 ms to 10 sec
+			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 5},
 		},
 		[]string{"endpoint"},
 	)
@@ -43,7 +43,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "morphic_worker_processing_time_seconds",
 			Help:    "Time spent processing an event by background workers",
-			Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10},
+			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5},
 		},
 		[]string{"module", "operation"},
 	)

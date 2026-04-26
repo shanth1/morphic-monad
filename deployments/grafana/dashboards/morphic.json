@@ -291,6 +291,41 @@
       ],
       "title": "System CPU Usage",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "lineWidth": 2
+          },
+          "unit": "Bps"
+        }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "id": 7,
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "editorMode": "code",
+          "expr": "rate(container_network_receive_bytes_total{name=~'.*nats.*'}[1m])",
+          "legendFormat": "NATS Network Bytes Received",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "NATS Network Traffic (Claim Check Validation)",
+      "type": "timeseries"
     }
   ],
   "refresh": "5s",

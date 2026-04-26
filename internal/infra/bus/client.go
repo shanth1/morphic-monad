@@ -74,12 +74,19 @@ func (c *Client) Publish(ctx context.Context, topic events.Topic, env *events.En
 }
 
 func (c *Client) Subscribe(ctx context.Context, topic events.Topic, queueGroup string, handler events.Handler) error {
+	deliverPolicy := jetstream.DeliverAllPolicy
+	// TODO: check
+	if queueGroup == "" {
+		// If this is a Gateway (Reply Router without a group), we listen only to recent responses
+		deliverPolicy = jetstream.DeliverNewPolicy
+	}
+
 	consumer, err := c.js.CreateOrUpdateConsumer(ctx, c.streamName, jetstream.ConsumerConfig{
 		Durable:       queueGroup,
 		FilterSubject: string(topic),
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		MaxDeliver:    5,
-		DeliverPolicy: jetstream.DeliverAllPolicy,
+		DeliverPolicy: deliverPolicy,
 	})
 	if err != nil {
 		return fmt.Errorf("create consumer: %w", err)

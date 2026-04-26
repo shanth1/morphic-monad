@@ -12,7 +12,7 @@ services:
     environment:
       - APP_ENV=local
       - NATS_URL=nats://nats:4222
-      - S3_ENDPOINT=http://s3:4566
+      - S3_ENDPOINT=http://s3:9090
     depends_on:
       nats:
         condition: service_healthy

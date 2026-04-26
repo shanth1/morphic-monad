@@ -71,8 +71,8 @@ build-micro: clean ## Build microservices binaries
 	@echo "🔨 Building microservices..."
 	@CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_DIR)/gateway $(CMD_GW_PATH)
 	@CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_DIR)/router $(CMD_ROUTER_PATH)
-	@CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_DIR)/router $(CMD_ENGINE_PATH)
-	@CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_DIR)/router $(CMD_EMBEDDER_PATH)
+	@CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_DIR)/engine $(CMD_ENGINE_PATH)
+	@CGO_ENABLED=0 go build $(GO_BUILD_FLAGS) $(LDFLAGS) -o $(BINARY_DIR)/embedder $(CMD_EMBEDDER_PATH)
 
 test: ## Run unit tests with race detector
 	@go test -v -race ./...

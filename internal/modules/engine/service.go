@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/shanth1/gotools/log"
@@ -77,6 +78,9 @@ func (s *Service) handleUpsert(ctx context.Context, tenantID domain.TenantID, pa
 		chunkID := domain.ChunkID(chunk.ChunkID)
 		vector := domain.Vector(chunk.Vector)
 
+		// TODO: remove
+		time.Sleep(time.Duration(1+rand.Intn(2)) * time.Millisecond)
+
 		err := s.vectorDB.Upsert(ctx, tenantID, docID, chunkID, vector)
 		if err != nil {
 			s.logger.Error().Err(err).Str("doc_id", string(docID)).Msg("failed to upsert vector")
@@ -107,6 +111,9 @@ func (s *Service) handleSearch(ctx context.Context, tenantID domain.TenantID, co
 	if topK <= 0 {
 		topK = 5 // Default TopK
 	}
+
+	// TODO: remove:
+	time.Sleep(time.Duration(2+rand.Intn(3)) * time.Millisecond)
 
 	// Perform strict multitenant search in DB
 	searchResults, err := s.vectorDB.Search(ctx, tenantID, queryVector, topK)

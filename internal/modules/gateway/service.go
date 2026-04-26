@@ -175,7 +175,8 @@ func (s *Service) SearchDocuments(ctx context.Context, tenantID, queryText, blob
 	metrics.EventsPublishedTotal.WithLabelValues(string(events.TopicIngress), string(env.Type)).Inc()
 
 	// Wait for the reply with a timeout (e.g., 10 seconds)
-	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	// TODO: update timeout
+	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Minute) // TODO: config
 	defer cancel()
 
 	select {
