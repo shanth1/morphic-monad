@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=http://json-schema.org/draft-07/schema#
+apiVersion: 1
+providers:
+  - name: 'Default'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
