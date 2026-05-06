@@ -10,6 +10,8 @@ const (
 	// Worker Topics — channels for specific workers
 	TopicTaskEmbed  Topic = "platform.tasks.embed"
 	TopicTaskEngine Topic = "platform.tasks.engine"
+	TopicTaskVision Topic = "platform.tasks.vision"
+	TopicTaskChunk  Topic = "platform.tasks.chunk"
 
 	// DLQ (Dead Letter Queue) - a channel for fatal errors
 	TopicDLQ Topic = "platform.system.dlq"
@@ -17,7 +19,9 @@ const (
 
 // QueueGroup strictly defines consumer groups for load balancing
 const (
-	QueueGroupRouter   string = "router_cluster"
-	QueueGroupEmbedder string = "worker_embedder_cluster"
-	QueueGroupEngine   string = "engine_cluster"
+	QueueGroupRouter   = "router_group"
+	QueueGroupVision   = "vision_group"
+	QueueGroupChunker  = "chunker_group"
+	QueueGroupEmbedder = "embedder_group"
+	QueueGroupEngine   = "engine_group"
 )

@@ -6,12 +6,15 @@ const (
 	// --- Ingestion & Claim Check ---
 	EventIngestRequested EventType = "data.ingest.requested"
 
-	// --- Search ---
+	// --- Search (Engine) ---
 	EventSearchRequested EventType = "data.search.requested"
+	EventSearchCompleted EventType = "data.search.completed"
 
-	// --- Workers: Embeddings & VectorDB ---
-	EventTaskEmbedCompleted EventType = "task.embed.completed"
-
-	// --- Engine ---
-	EventSearchCompleted EventType = "engine.search.completed"
+	// --- Workers ---
+	EventTaskVisionRequested EventType = "task.vision.requested"
+	EventTaskVisionCompleted EventType = "task.vision.completed"
+	EventTaskChunkRequested  EventType = "task.chunk.requested"
+	EventTaskChunkCompleted  EventType = "task.chunk.completed"
+	EventTaskEmbedRequested  EventType = "task.embed.requested"
+	EventTaskEmbedCompleted  EventType = "task.embed.completed"
 )
