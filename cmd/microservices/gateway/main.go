@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	goconsts "github.com/shanth1/gotools/consts"
 	"github.com/shanth1/gotools/log"
 	"github.com/shanth1/gotools/logkeys"
@@ -104,8 +105,9 @@ func main() {
 	)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/ingest", gatewayHandler.HandleIngest)
-	mux.HandleFunc("/v1/search", gatewayHandler.HandleSearch)
+	mux.HandleFunc("/v1/ingest", gatewayhttp.MetricsMiddleware("/v1/ingest", gatewayHandler.HandleIngest))
+	mux.HandleFunc("/v1/search", gatewayhttp.MetricsMiddleware("/v1/search", gatewayHandler.HandleSearch))
+	mux.Handle("/metrics", promhttp.Handler())
 	httpServer := infrahttp.NewServer(
 		cfg.Modules.Gateway.Port,
 		mux,
@@ -113,7 +115,7 @@ func main() {
 	)
 
 	supervisor := app.NewSupervisor(logger)
-	supervisor.Register(httpServer)
+	supervisor.Register(httpServer, gatewayCore)
 
 	logger.Info().Msg(logmsg.AppInitializing)
 

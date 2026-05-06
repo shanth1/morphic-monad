@@ -1,12 +1,16 @@
-version: '3.8'
-
 services:
   nats:
     image: nats:alpine
-    command: '-js -m 8222'
+    command: '-js -m 8222 -sd /data'
     ports:
       - '4222:4222'
       - '8222:8222'
+    volumes:
+      - nats-data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 4G
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://localhost:8222/varz']
       interval: 2s
@@ -19,8 +23,15 @@ services:
       - '9090:9090'
     environment:
       - initialBuckets=platform-documents
+    deploy:
+      resources:
+        limits:
+          memory: 4G
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://localhost:9090/']
       interval: 2s
       timeout: 2s
       retries: 10
+
+volumes:
+  nats-data:
