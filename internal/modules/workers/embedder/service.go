@@ -31,6 +31,7 @@ func (s *Service) handleTask(ctx context.Context, msg events.Message) error {
 
 	var docID, chunkID, textToEmbed, blobURI, mimeType string
 	var origType events.EventType
+	var searchTopK int
 
 	if env.Type == events.EventIngestRequested {
 		var p events.IngestPayload
@@ -40,6 +41,7 @@ func (s *Service) handleTask(ctx context.Context, msg events.Message) error {
 		var p events.SearchPayload
 		_ = env.DecodeData(&p)
 		docID, chunkID, textToEmbed, blobURI, mimeType, origType = "search", "search", p.QueryText, p.BlobURI, p.MimeType, env.Type
+		searchTopK = p.TopK
 	} else if env.Type == events.EventTaskVisionCompleted || env.Type == events.EventTaskChunkCompleted {
 		var p events.EmbedRequestedPayload
 		_ = env.DecodeData(&p)
@@ -72,6 +74,7 @@ func (s *Service) handleTask(ctx context.Context, msg events.Message) error {
 		DocumentID:   docID,
 		Chunks:       chunks,
 		OriginalType: origType,
+		SearchTopK:   searchTopK,
 	}
 
 	resultEnv, _ := events.NewEnvelope(env.TenantID, env.CorrelationID, events.EventTaskEmbedCompleted, "worker.embedder", resultPayload)
