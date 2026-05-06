@@ -134,7 +134,7 @@ func (c *Client) InitStream(ctx context.Context) error {
 	_, err := c.js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:     c.streamName,
 		Subjects: []string{"platform.>"},
-		Storage:  jetstream.MemoryStorage,
+		Storage:  jetstream.FileStorage, // TODO: config: jetstream.FileStorage
 	})
 	return err
 }

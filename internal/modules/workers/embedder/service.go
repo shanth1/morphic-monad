@@ -95,7 +95,7 @@ func (s *Service) handleTask(ctx context.Context, msg events.Message) error {
 	}
 
 	// TODO: remove
-	time.Sleep(time.Duration(1+rand.Intn(4)) * time.Millisecond)
+	time.Sleep(time.Duration(5+rand.Intn(5)) * time.Millisecond)
 
 	// Vectorize content (Mock implementation)
 	chunkVector := s.mockVectorize(textToEmbed)

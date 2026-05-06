@@ -115,7 +115,7 @@ func main() {
 	)
 
 	supervisor := app.NewSupervisor(logger)
-	supervisor.Register(httpServer)
+	supervisor.Register(httpServer, gatewayCore)
 
 	logger.Info().Msg(logmsg.AppInitializing)
 

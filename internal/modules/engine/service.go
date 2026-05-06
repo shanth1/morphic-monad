@@ -79,7 +79,7 @@ func (s *Service) handleUpsert(ctx context.Context, tenantID domain.TenantID, pa
 		vector := domain.Vector(chunk.Vector)
 
 		// TODO: remove
-		time.Sleep(time.Duration(1+rand.Intn(2)) * time.Millisecond)
+		time.Sleep(time.Duration(5+rand.Intn(5)) * time.Millisecond)
 
 		err := s.vectorDB.Upsert(ctx, tenantID, docID, chunkID, vector)
 		if err != nil {
@@ -113,7 +113,7 @@ func (s *Service) handleSearch(ctx context.Context, tenantID domain.TenantID, co
 	}
 
 	// TODO: remove:
-	time.Sleep(time.Duration(2+rand.Intn(3)) * time.Millisecond)
+	time.Sleep(time.Duration(5+rand.Intn(10)) * time.Millisecond)
 
 	// Perform strict multitenant search in DB
 	searchResults, err := s.vectorDB.Search(ctx, tenantID, queryVector, topK)

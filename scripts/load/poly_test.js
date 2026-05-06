@@ -4,7 +4,7 @@ export const options = {
   scenarios: {
     ingest_load: {
       executor: 'constant-arrival-rate',
-      rate: 300,
+      rate: 3000,
       timeUnit: '1s',
       duration: '1m',
       preAllocatedVUs: 100,
@@ -13,7 +13,7 @@ export const options = {
     },
     search_load: {
       executor: 'constant-arrival-rate',
-      rate: 100,
+      rate: 1000,
       timeUnit: '1s',
       duration: '1m',
       preAllocatedVUs: 100,

@@ -318,7 +318,7 @@
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "editorMode": "code",
-          "expr": "rate(container_network_receive_bytes_total{name=~'.*nats.*'}[1m])",
+          "expr": "sum(rate({__name__=~'.*varz_in_bytes.*'}[1m]))",
           "legendFormat": "NATS Network Bytes Received",
           "range": true,
           "refId": "A"

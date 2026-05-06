@@ -9,3 +9,10 @@ scrape_configs:
       - targets:
           - 'host.docker.internal:8080'
           - 'gateway:8080'
+          - 'router:8081'
+          - 'engine:8082'
+          - 'embedder:8083'
+  - job_name: 'nats'
+    static_configs:
+      - targets:
+          - 'nats-exporter:7777'

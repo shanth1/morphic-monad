@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	goconsts "github.com/shanth1/gotools/consts"
 	"github.com/shanth1/gotools/log"
 	"github.com/shanth1/gotools/logkeys"
@@ -14,6 +16,7 @@ import (
 	"github.com/shanth1/morphic-monad/internal/app"
 	"github.com/shanth1/morphic-monad/internal/infra/bus"
 	"github.com/shanth1/morphic-monad/internal/infra/config"
+	infrahttp "github.com/shanth1/morphic-monad/internal/infra/http"
 	"github.com/shanth1/morphic-monad/internal/pkg/consts"
 	"github.com/shanth1/morphic-monad/internal/pkg/logmsg"
 
@@ -87,8 +90,12 @@ func main() {
 		logger.With(log.Str("module", consts.ServiceRouter)),
 	)
 
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	httpServer := infrahttp.NewServer("8081", mux, logger)
+
 	supervisor := app.NewSupervisor(logger)
-	supervisor.Register(routerCore)
+	supervisor.Register(routerCore, httpServer)
 
 	logger.Info().Msg(logmsg.AppStarting)
 
