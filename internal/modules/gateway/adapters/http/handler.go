@@ -2,8 +2,12 @@ package http
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"strconv"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/shanth1/gotools/log"
 	"github.com/shanth1/morphic-monad/internal/modules/gateway"
 )
@@ -24,93 +28,111 @@ func NewHandler(svc gateway.GatewayService, l log.Logger) *Handler {
 func (h *Handler) HandleIngest(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get("X-Tenant-ID")
 	if tenantID == "" {
-		h.writeError(w, http.StatusBadRequest, "X-Tenant-ID header is required")
+		h.writeError(w, http.StatusBadRequest, "X-Tenant-ID is required")
 		return
 	}
 
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		h.writeError(w, http.StatusBadRequest, "failed to parse multipart form")
+	err := r.ParseMultipartForm(100 << 20) // 100 MB max
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "failed to parse form")
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
 
-	// Extract short text (context) if it was passed
-	contextText := r.FormValue("context_text")
+	text := r.FormValue("text")
+	files := r.MultipartForm.File["files"]
 
-	// Trying to extract a file (it's now optional)
-	var filename, mimeType string
-	var size int64
-
-	file, header, err := r.FormFile("file")
-	if err == nil {
-		defer file.Close()
-		filename = header.Filename
-		mimeType = header.Header.Get("Content-Type")
-		size = header.Size
-	} else if err != http.ErrMissingFile {
-		h.writeError(w, http.StatusBadRequest, "error reading file field")
+	if text == "" && len(files) == 0 {
+		h.writeError(w, http.StatusBadRequest, "text or files required")
 		return
 	}
 
-	// Business validation: Either text, a file, or both must be submitted
-	if contextText == "" && file == nil {
-		h.writeError(w, http.StatusBadRequest, "either 'context_text' or 'file' must be provided")
-		return
+	correlationID := uuid.NewString()
+	var docIDs []string
+
+	// 1. Process Text
+	if text != "" {
+		docID, err := h.svc.IngestDocument(r.Context(), tenantID, correlationID, text, "", "text/plain", int64(len(text)), nil)
+		if err != nil {
+			h.writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		docIDs = append(docIDs, docID)
 	}
 
-	// We pass everything to the Gateway core (it will sort it out itself: it will throw the text into the bus, and the file into the BlobStore)
-	docID, err := h.svc.IngestDocument(r.Context(), tenantID, contextText, filename, mimeType, size, file)
-	if err != nil {
-		h.logger.Error().Err(err).Msg("ingest use case failed")
-		h.writeError(w, http.StatusInternalServerError, "internal processing error")
-		return
+	// 2. Process Files
+	for _, fileHeader := range files {
+		file, err := fileHeader.Open()
+		if err != nil {
+			continue
+		}
+		mimeType := fileHeader.Header.Get("Content-Type")
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
+		}
+
+		docID, err := h.svc.IngestDocument(r.Context(), tenantID, correlationID, "", fileHeader.Filename, mimeType, fileHeader.Size, file)
+		file.Close()
+		if err != nil {
+			continue
+		}
+		docIDs = append(docIDs, docID)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]string{
-		"status":      "accepted",
-		"document_id": docID,
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":         "accepted",
+		"correlation_id": correlationID,
+		"document_ids":   docIDs,
 	})
-}
-
-// SearchRequest DTO for synchronous search
-type SearchRequest struct {
-	QueryText string `json:"query_text"`
-	TopK      int    `json:"top_k"`
 }
 
 // HandleSearch — endpoint for searching (POST /v1/search)
 func (h *Handler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get("X-Tenant-ID")
 	if tenantID == "" {
-		h.writeError(w, http.StatusBadRequest, "X-Tenant-ID header is required")
+		h.writeError(w, http.StatusBadRequest, "X-Tenant-ID is required")
 		return
 	}
 
-	var req SearchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "invalid json body")
-		return
-	}
-
-	if req.TopK <= 0 {
-		req.TopK = 5
-	}
-
-	// We call a synchronous method, which under the hood waits for an asynchronous response from the bus
-	results, err := h.svc.SearchDocuments(r.Context(), tenantID, req.QueryText, "", req.TopK)
+	// Парсим multipart, а не JSON!
+	err := r.ParseMultipartForm(50 << 20)
 	if err != nil {
-		h.logger.Error().Err(err).Msg("search use case failed")
-		h.writeError(w, http.StatusGatewayTimeout, err.Error())
+		h.writeError(w, http.StatusBadRequest, "failed to parse form, must be multipart/form-data")
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
+
+	queryText := r.FormValue("query_text")
+	topKStr := r.FormValue("top_k")
+	topK := 5
+	if k, err := strconv.Atoi(topKStr); err == nil && k > 0 {
+		topK = k
+	}
+
+	var file io.ReadCloser
+	var filename, mimeType string
+	var size int64
+
+	f, header, err := r.FormFile("file")
+	if err == nil {
+		file = f
+		filename = header.Filename
+		mimeType = header.Header.Get("Content-Type")
+		size = header.Size
+		defer file.Close()
+	}
+
+	results, err := h.svc.SearchDocuments(r.Context(), tenantID, queryText, filename, mimeType, size, file, topK)
+	if err != nil {
+		h.logger.Error().Err(err).Msg("search failed")
+		h.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]any{
-		"results": results,
-	})
+	json.NewEncoder(w).Encode(map[string]any{"results": results})
 }
 
 // Helper function for standardizing error output
@@ -120,4 +142,67 @@ func (h *Handler) writeError(w http.ResponseWriter, status int, message string) 
 	json.NewEncoder(w).Encode(map[string]string{
 		"error": message,
 	})
+}
+
+func (h *Handler) HandleStreamEvents(w http.ResponseWriter, r *http.Request) {
+	correlationID := r.URL.Query().Get("correlation_id")
+	if correlationID == "" {
+		h.writeError(w, http.StatusBadRequest, "correlation_id required")
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		h.writeError(w, http.StatusInternalServerError, "streaming unsupported")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ch, err := h.svc.ListenEvents(r.Context(), correlationID)
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case env := <-ch:
+			data, _ := json.Marshal(map[string]any{
+				"type":   env.Type,
+				"source": env.Source,
+			})
+			w.Write([]byte("data: "))
+			w.Write(data)
+			w.Write([]byte("\n\n"))
+			flusher.Flush()
+		}
+	}
+}
+
+func (h *Handler) HandleBlob(w http.ResponseWriter, r *http.Request) {
+	uri := r.URL.Query().Get("uri")
+	if uri == "" {
+		h.writeError(w, http.StatusBadRequest, "uri required")
+		return
+	}
+
+	rc, err := h.svc.GetBlob(r.Context(), uri)
+	if err != nil {
+		h.writeError(w, http.StatusNotFound, "blob not found")
+		return
+	}
+	defer rc.Close()
+
+	if strings.HasSuffix(uri, ".png") {
+		w.Header().Set("Content-Type", "image/png")
+	} else if strings.HasSuffix(uri, ".jpg") {
+		w.Header().Set("Content-Type", "image/jpeg")
+	}
+
+	io.Copy(w, rc)
 }
