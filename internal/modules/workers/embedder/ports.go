@@ -21,3 +21,7 @@ type EventPublisher interface {
 type BlobReader interface {
 	Download(ctx context.Context, uri string) (io.ReadCloser, error)
 }
+
+type TextVectoriser interface {
+	Vectorise(ctx context.Context, text string) ([]float32, error)
+}
