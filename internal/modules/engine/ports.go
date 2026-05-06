@@ -19,6 +19,15 @@ type EventPublisher interface {
 
 // VectorDB is an infrastructure port for working with vector storage.
 type VectorDB interface {
-	Upsert(ctx context.Context, tenantID domain.TenantID, docID domain.DocumentID, chunkID domain.ChunkID, vector domain.Vector) error
+	Upsert(
+		ctx context.Context,
+		tenantID domain.TenantID,
+		docID domain.DocumentID,
+		chunkID domain.ChunkID,
+		vector domain.Vector,
+		text string,
+		fileURI string,
+		mimeType string,
+	) error
 	Search(ctx context.Context, tenantID domain.TenantID, queryVector domain.Vector, topK int) ([]SearchResult, error)
 }
