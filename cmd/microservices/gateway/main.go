@@ -9,76 +9,36 @@ import (
 	"syscall"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	goconsts "github.com/shanth1/gotools/consts"
 	"github.com/shanth1/gotools/log"
-	"github.com/shanth1/gotools/logkeys"
+	infrahttp "github.com/shanth1/morphic-monad/internal/infra/http"
 
 	"github.com/shanth1/morphic-monad/internal/app"
 	"github.com/shanth1/morphic-monad/internal/infra/bus"
 	"github.com/shanth1/morphic-monad/internal/infra/config"
-	infrahttp "github.com/shanth1/morphic-monad/internal/infra/http"
-	"github.com/shanth1/morphic-monad/internal/pkg/consts"
-	"github.com/shanth1/morphic-monad/internal/pkg/logmsg"
-
 	"github.com/shanth1/morphic-monad/internal/modules/gateway"
 	gatewayhttp "github.com/shanth1/morphic-monad/internal/modules/gateway/adapters/http"
 	"github.com/shanth1/morphic-monad/internal/modules/gateway/adapters/s3"
 )
 
-var (
-	CommitHash = "n/a"
-	BuildTime  = "n/a"
-)
-
 func main() {
-	baseLogger := log.New()
+	logger := log.New()
 
 	cfg, err := config.Load()
 	if err != nil {
-		baseLogger.Fatal().Err(err).Msg(logmsg.LoadConfigFailed)
+		logger.Fatal().Err(err).Msg("failed to load config")
 	}
-
-	if err := cfg.Validate(); err != nil {
-		baseLogger.Fatal().Err(err).Msg(logmsg.ValidatingConfigFailed)
-	}
-
-	logger := baseLogger.WithOptions(log.WithConfig(log.Config{
-		Level:        cfg.Logger.Level,
-		App:          consts.AppName,
-		Service:      consts.ServiceGateway,
-		UDPAddress:   cfg.Logger.UDPAddress,
-		EnableCaller: cfg.Logger.EnableCaller,
-		Console:      cfg.System.Env != goconsts.EnvProd,
-		JSONOutput:   cfg.System.Env == goconsts.EnvProd,
-	}))
-
-	logger.Info().
-		Any(logkeys.Env, cfg.System.Env).
-		Str(logkeys.GitHash, CommitHash).
-		Msg(logmsg.AppInitializing)
 
 	appCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// --- Infrastructure ---
-
-	// Connecting to an external NATS cluster
-	busClient, err := bus.NewClient(
-		consts.ServiceGateway,
-		cfg.Transport.Nats.URL,
-		cfg.Transport.Nats.StreamName,
-		logger.With(log.Str("component", consts.ComponentNATSClient)),
-	)
+	// --- Инфраструктура ---
+	busClient, err := bus.NewClient("gateway", cfg.Transport.Nats.URL, cfg.Transport.Nats.StreamName, logger)
 	if err != nil {
-		logger.Fatal().Err(err).Msg(logmsg.BusConnectionFailed)
+		logger.Fatal().Err(err).Msg("failed to connect to NATS")
 	}
 	defer busClient.Close()
+	_ = busClient.InitStream(appCtx)
 
-	if err := busClient.InitStream(appCtx); err != nil {
-		logger.Fatal().Err(err).Msg(logmsg.InitBusStreamFailed)
-	}
-
-	// Connecting to external AWS S3 / LocalStack
 	s3Config := s3.Config{
 		Endpoint:        cfg.Modules.Tools.BlobStore.S3.Endpoint,
 		Region:          cfg.Modules.Tools.BlobStore.S3.Region,
@@ -92,34 +52,27 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to initialize S3 adapter")
 	}
 
-	gatewayCore := gateway.NewService(
-		busClient,
-		busClient,
-		s3Adapter,
-		logger.With(log.Str("module", consts.ServiceGateway)),
-	)
+	// --- Инициализация Core ---
+	gatewayCore := gateway.NewService(busClient, busClient, s3Adapter, logger)
+	gatewayHandler := gatewayhttp.NewHandler(gatewayCore, logger)
 
-	gatewayHandler := gatewayhttp.NewHandler(
-		gatewayCore,
-		logger.With(log.Str("module", consts.ServiceGateway)),
-	)
-
+	// --- Регистрация Роутов ---
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/ingest", gatewayhttp.MetricsMiddleware("/v1/ingest", gatewayHandler.HandleIngest))
 	mux.HandleFunc("/v1/search", gatewayhttp.MetricsMiddleware("/v1/search", gatewayHandler.HandleSearch))
+
+	// НОВЫЕ РОУТЫ!
+	mux.HandleFunc("/v1/events/stream", gatewayHandler.HandleStreamEvents)
+	mux.HandleFunc("/v1/blob", gatewayHandler.HandleBlob)
+
 	mux.Handle("/metrics", promhttp.Handler())
-	httpServer := infrahttp.NewServer(
-		cfg.Modules.Gateway.Port,
-		mux,
-		logger.With(log.Str("component", consts.ComponentHTTPServer)),
-	)
+
+	httpServer := infrahttp.NewServer(cfg.Modules.Gateway.Port, mux, logger)
 
 	supervisor := app.NewSupervisor(logger)
 	supervisor.Register(httpServer, gatewayCore)
 
-	logger.Info().Msg(logmsg.AppInitializing)
-
 	if err := supervisor.Run(appCtx); err != nil && !errors.Is(err, context.Canceled) {
-		logger.Fatal().Err(err).Msg(logmsg.AppRuntimeError)
+		logger.Fatal().Err(err).Msg("runtime error")
 	}
 }
