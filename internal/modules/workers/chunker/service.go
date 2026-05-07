@@ -60,7 +60,7 @@ func (s *Service) handleTask(ctx context.Context, msg events.Message) error {
 	textData, _ := io.ReadAll(rc)
 
 	// Split Text (Chunk Explosion)
-	chunks := strings.Split(string(textData), "\n\n")
+	chunks := chunkText(string(textData), 500, 50)
 
 	for _, textChunk := range chunks {
 		if strings.TrimSpace(textChunk) == "" {
@@ -81,4 +81,21 @@ func (s *Service) handleTask(ctx context.Context, msg events.Message) error {
 	}
 
 	return msg.Ack()
+}
+
+func chunkText(text string, chunkSize, overlap int) []string {
+	runes := []rune(text)
+	var chunks []string
+	for i := 0; i < len(runes); {
+		end := i + chunkSize
+		if end > len(runes) {
+			end = len(runes)
+		}
+		chunks = append(chunks, string(runes[i:end]))
+		if end == len(runes) {
+			break
+		}
+		i = end - overlap
+	}
+	return chunks
 }
