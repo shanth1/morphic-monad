@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/shanth1/gotools/log"
@@ -75,16 +74,9 @@ func (s *Service) handleUpsert(ctx context.Context, tenantID domain.TenantID, pa
 	docID := domain.DocumentID(payload.DocumentID)
 
 	for _, chunk := range payload.Chunks {
-		chunkID := domain.ChunkID(chunk.ChunkID)
-		vector := domain.Vector(chunk.Vector)
-
-		// TODO: remove
-		time.Sleep(time.Duration(5+rand.Intn(5)) * time.Millisecond)
-
-		err := s.vectorDB.Upsert(ctx, tenantID, docID, chunkID, vector)
+		err := s.vectorDB.Upsert(ctx, tenantID, docID, domain.ChunkID(chunk.ChunkID), domain.Vector(chunk.Vector), chunk.Text, chunk.BlobURI, chunk.MimeType)
 		if err != nil {
-			s.logger.Error().Err(err).Str("doc_id", string(docID)).Msg("failed to upsert vector")
-			return msg.Nack() // Return to queue for retry
+			return msg.Nack()
 		}
 	}
 
@@ -112,9 +104,6 @@ func (s *Service) handleSearch(ctx context.Context, tenantID domain.TenantID, co
 		topK = 5 // Default TopK
 	}
 
-	// TODO: remove:
-	time.Sleep(time.Duration(5+rand.Intn(10)) * time.Millisecond)
-
 	// Perform strict multitenant search in DB
 	searchResults, err := s.vectorDB.Search(ctx, tenantID, queryVector, topK)
 	if err != nil {
@@ -129,6 +118,9 @@ func (s *Service) handleSearch(ctx context.Context, tenantID domain.TenantID, co
 			DocumentID: string(res.DocumentID),
 			ChunkID:    string(res.ChunkID),
 			Score:      res.Score,
+			Text:       res.Text,
+			BlobURI:    res.FileURI,
+			MimeType:   res.MimeType,
 		})
 	}
 

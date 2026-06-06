@@ -7,4 +7,7 @@ type SearchResult struct {
 	DocumentID domain.DocumentID
 	ChunkID    domain.ChunkID
 	Score      float32 // From 0.0 to 1.0 (the closer to 1, the more similar)
+	Text       string
+	FileURI    string
+	MimeType   string
 }

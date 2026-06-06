@@ -129,6 +129,25 @@ func (c *Client) Subscribe(ctx context.Context, topic events.Topic, queueGroup s
 	return nil
 }
 
+// SubscribeEphemeral creates a lightweight Core NATS subscription for SSE streaming
+func (c *Client) SubscribeEphemeral(ctx context.Context, topic events.Topic, handler func(*events.Envelope)) error {
+	sub, err := c.nc.Subscribe(string(topic), func(m *nats.Msg) {
+		var env events.Envelope
+		if err := json.Unmarshal(m.Data, &env); err == nil {
+			handler(&env)
+		}
+	})
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		<-ctx.Done()
+		_ = sub.Unsubscribe()
+	}()
+	return nil
+}
+
 // InitStream checks for the existence of a stream and creates it if necessary
 func (c *Client) InitStream(ctx context.Context) error {
 	_, err := c.js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{

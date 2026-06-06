@@ -17,8 +17,8 @@ import (
 	"github.com/shanth1/morphic-monad/internal/infra/config"
 	"github.com/shanth1/morphic-monad/internal/modules/gateway/adapters/s3"
 
-	"github.com/shanth1/morphic-monad/internal/modules/workers/embedder"
-	embedderllm "github.com/shanth1/morphic-monad/internal/modules/workers/embedder/adapters/llm"
+	"github.com/shanth1/morphic-monad/internal/modules/workers/vision"
+	visionllm "github.com/shanth1/morphic-monad/internal/modules/workers/vision/adapters/llm"
 )
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
 	appCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	busClient, err := bus.NewClient("embedder", cfg.Transport.Nats.URL, cfg.Transport.Nats.StreamName, logger)
+	busClient, err := bus.NewClient("vision", cfg.Transport.Nats.URL, cfg.Transport.Nats.StreamName, logger)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to connect to NATS")
 	}
@@ -41,10 +41,10 @@ func main() {
 
 	s3Config := s3.Config{
 		Endpoint:        cfg.Modules.Tools.BlobStore.S3.Endpoint,
-		Region:          cfg.Modules.Tools.BlobStore.S3.Region,
+		BucketName:      cfg.Modules.Tools.BlobStore.S3.Bucket,
 		AccessKeyID:     cfg.Modules.Tools.BlobStore.S3.AccessKey,
 		SecretAccessKey: cfg.Modules.Tools.BlobStore.S3.SecretKey,
-		BucketName:      cfg.Modules.Tools.BlobStore.S3.Bucket,
+		Region:          cfg.Modules.Tools.BlobStore.S3.Region,
 		UsePathStyle:    cfg.Modules.Tools.BlobStore.S3.UsePathStyle,
 	}
 	s3Adapter, err := s3.NewAdapter(context.Background(), s3Config)
@@ -52,21 +52,21 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to connect to S3")
 	}
 
-	var embedAdapter embedder.TextVectoriser
-	if cfg.Modules.Tools.Embedder.Provider == "ollama" {
-		embedAdapter = embedderllm.NewOllamaVectoriser(cfg.Modules.Tools.Embedder.Ollama.BaseURL, cfg.Modules.Tools.Embedder.Ollama.Model)
+	var visionAdapter vision.ImageDescriber
+	if cfg.Modules.Tools.Vision.Provider == "ollama" {
+		visionAdapter = visionllm.NewOllamaDescriber(cfg.Modules.Tools.Vision.Ollama.BaseURL, cfg.Modules.Tools.Vision.Ollama.Model)
 	} else {
-		embedAdapter = embedderllm.NewMockVectoriser(384)
+		visionAdapter = visionllm.NewMockDescriber()
 	}
 
-	embedderWorker := embedder.NewService(busClient, busClient, s3Adapter, embedAdapter, logger)
+	visionWorker := vision.NewService(busClient, busClient, s3Adapter, visionAdapter, logger)
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
-	httpServer := infrahttp.NewServer("8083", mux, logger)
+	httpServer := infrahttp.NewServer("8084", mux, logger)
 
 	supervisor := app.NewSupervisor(logger)
-	supervisor.Register(embedderWorker, httpServer)
+	supervisor.Register(visionWorker, httpServer)
 	if err := supervisor.Run(appCtx); err != nil && !errors.Is(err, context.Canceled) {
 		logger.Fatal().Err(err).Msg("runtime error")
 	}

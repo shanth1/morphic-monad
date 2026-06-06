@@ -8,7 +8,7 @@ services:
     ports:
       - '8080:8080'
     environment:
-      - APP_ENV=local
+      - APP_ENV=dev
       - NATS_URL=nats://nats:4222
       - S3_ENDPOINT=http://s3:9090
     depends_on:
@@ -24,7 +24,7 @@ services:
       args:
         SERVICE_NAME: router
     environment:
-      - APP_ENV=local
+      - APP_ENV=dev
       - NATS_URL=nats://nats:4222
     depends_on:
       nats:
@@ -37,7 +37,7 @@ services:
       args:
         SERVICE_NAME: engine
     environment:
-      - APP_ENV=local
+      - APP_ENV=dev
       - NATS_URL=nats://nats:4222
     depends_on:
       nats:
@@ -50,7 +50,39 @@ services:
       args:
         SERVICE_NAME: embedder
     environment:
-      - APP_ENV=local
+      - APP_ENV=dev
+      - NATS_URL=nats://nats:4222
+      - S3_ENDPOINT=http://s3:9090
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      nats:
+        condition: service_healthy
+
+  vision:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.microservice
+      args:
+        SERVICE_NAME: vision
+    environment:
+      - APP_ENV=dev
+      - NATS_URL=nats://nats:4222
+      - S3_ENDPOINT=http://s3:9090
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      nats:
+        condition: service_healthy
+
+  chunker:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.microservice
+      args:
+        SERVICE_NAME: chunker
+    environment:
+      - APP_ENV=dev
       - NATS_URL=nats://nats:4222
       - S3_ENDPOINT=http://s3:9090
     depends_on:

@@ -131,24 +131,16 @@ modules:
 
     # --- Embedder (Text to Vector) ---
     embedder:
-      provider: 'openai' # Options: openai, openrouter, ollama, local, mock
-      dimensions: 1536
-
-      openai:
-        model: 'text-embedding-3-small'
-        # key: via ENV OPENAI_KEY
-
-      openrouter:
-        model: 'text-embedding-ada-002'
-        # key: via ENV OPENROUTER_KEY
-
+      provider: 'ollama' # Options: openai, openrouter, ollama, local, mock
       ollama:
         base_url: 'http://localhost:11434'
         model: 'nomic-embed-text'
 
-      local:
-        model_path: './models/all-MiniLM-L6-v2.onnx'
-        use_gpu: false
+    vision:
+      provider: 'ollama'
+      ollama:
+        base_url: 'http://localhost:11434'
+        model: 'llava'
 
     # --- Vector DB (Semantic Index) ---
     vector_db:

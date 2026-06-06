@@ -3,6 +3,7 @@ package classifier
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/shanth1/morphic-monad/pkg/events"
 )
@@ -18,12 +19,32 @@ func NewStaticRuleEngine() *StaticRuleEngine {
 
 func (c *StaticRuleEngine) Classify(ctx context.Context, env *events.Envelope) (events.Topic, error) {
 	switch env.Type {
-
-	// Both new data (Ingest) and search queries (Search) are sent to vectorization
 	case events.EventIngestRequested, events.EventSearchRequested:
+		var mime string
+		var blob string
+
+		if env.Type == events.EventIngestRequested {
+			var p events.IngestPayload
+			_ = env.DecodeData(&p)
+			mime, blob = p.MimeType, p.BlobURI
+		} else {
+			var p events.SearchPayload
+			_ = env.DecodeData(&p)
+			mime, blob = p.MimeType, p.BlobURI
+		}
+
+		if strings.HasPrefix(mime, "image/") {
+			return events.TopicTaskVision, nil
+		}
+		if blob != "" && strings.Contains(mime, "text/") {
+			return events.TopicTaskChunk, nil
+		}
+
 		return events.TopicTaskEmbed, nil
 
-	// Vectorization results always go to Engine
+	case events.EventTaskVisionCompleted, events.EventTaskChunkCompleted:
+		return events.TopicTaskEmbed, nil
+
 	case events.EventTaskEmbedCompleted:
 		return events.TopicTaskEngine, nil
 
