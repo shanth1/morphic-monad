@@ -11,7 +11,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	goconsts "github.com/shanth1/gotools/consts"
 	"github.com/shanth1/gotools/log"
-	"github.com/shanth1/gotools/logkeys"
 
 	"github.com/shanth1/morphic-monad/internal/app"
 	"github.com/shanth1/morphic-monad/internal/infra/blob"
@@ -27,7 +26,12 @@ import (
 	gatewayhttp "github.com/shanth1/morphic-monad/internal/modules/gateway/adapters/http"
 	"github.com/shanth1/morphic-monad/internal/modules/router"
 	"github.com/shanth1/morphic-monad/internal/modules/router/adapters/classifier"
+
+	"github.com/shanth1/morphic-monad/internal/modules/workers/chunker"
 	"github.com/shanth1/morphic-monad/internal/modules/workers/embedder"
+	embedderllm "github.com/shanth1/morphic-monad/internal/modules/workers/embedder/adapters/llm"
+	"github.com/shanth1/morphic-monad/internal/modules/workers/vision"
+	visionllm "github.com/shanth1/morphic-monad/internal/modules/workers/vision/adapters/llm"
 )
 
 var (
@@ -35,7 +39,6 @@ var (
 	BuildTime  = "n/a"
 )
 
-// natsRunner adapts the built-in NATS server to the app.Runnable interface
 type natsRunner struct {
 	srv *bus.Server
 }
@@ -66,18 +69,10 @@ func main() {
 		JSONOutput:   cfg.System.Env == goconsts.EnvProd,
 	}))
 
-	logger.Info().
-		Any(logkeys.Env, cfg.System.Env).
-		Str(logkeys.GitHash, CommitHash).
-		Str(logkeys.BuildTime, BuildTime).
-		Msg(logmsg.AppInitializing)
-
 	appCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	// --- Infrastructure ---
-
-	// Built-in NATS Server
 	embeddedNats, err := bus.NewServer(logger.With(log.Str("component", "nats_server")))
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to initialize embedded NATS server")
@@ -86,7 +81,6 @@ func main() {
 		logger.Fatal().Err(err).Msg(logmsg.InitBusFailed)
 	}
 
-	// Single NATS Client for all modules
 	busClient, err := bus.NewClient(
 		consts.ServiceMonolith,
 		embeddedNats.URL(),
@@ -102,55 +96,42 @@ func main() {
 		logger.Fatal().Err(err).Msg(logmsg.InitBusStreamFailed)
 	}
 
-	// In-Memory Blob Store
 	memoryBlobStore := blob.NewMemoryStorage()
-
-	// In-Memory VectorDB
 	memoryVectorDB := vectordb.NewMemoryVectorDB()
 
+	// --- AI Adapters ---
+	var embedAdapter embedder.TextVectoriser
+	if cfg.Modules.Tools.Embedder.Provider == "ollama" {
+		embedAdapter = embedderllm.NewOllamaVectoriser(cfg.Modules.Tools.Embedder.Ollama.BaseURL, cfg.Modules.Tools.Embedder.Ollama.Model)
+	} else {
+		embedAdapter = embedderllm.NewMockVectoriser(384)
+	}
+
+	var visionAdapter vision.ImageDescriber
+	if cfg.Modules.Tools.Vision.Provider == "ollama" {
+		visionAdapter = visionllm.NewOllamaDescriber(cfg.Modules.Tools.Vision.Ollama.BaseURL, cfg.Modules.Tools.Vision.Ollama.Model)
+	} else {
+		visionAdapter = visionllm.NewMockDescriber()
+	}
+
 	// --- Core Modules ---
-
-	engineCore := engine.NewService(
-		busClient,
-		busClient,
-		memoryVectorDB,
-		logger.With(log.Str("module", consts.ServiceEngine)),
-	)
-
-	gatewayCore := gateway.NewService(
-		busClient,
-		busClient,
-		memoryBlobStore,
-		logger.With(log.Str("module", consts.ServiceGateway)),
-	)
-
-	staticClassifier := classifier.NewStaticRuleEngine()
-	routerCore := router.NewService(
-		busClient,
-		busClient,
-		staticClassifier,
-		logger.With(log.Str("module", consts.ServiceRouter)),
-	)
+	engineCore := engine.NewService(busClient, busClient, memoryVectorDB, logger.With(log.Str("module", consts.ServiceEngine)))
+	gatewayCore := gateway.NewService(busClient, busClient, memoryBlobStore, logger.With(log.Str("module", consts.ServiceGateway)))
+	routerCore := router.NewService(busClient, busClient, classifier.NewStaticRuleEngine(), logger.With(log.Str("module", consts.ServiceRouter)))
 
 	// --- Worker Modules ---
-
-	embeddedWorker := embedder.NewService(
-		busClient,       // EventSubscriber
-		busClient,       // EventPublisher
-		memoryBlobStore, // BlobReader
-		logger.With(log.Str("module", consts.ServiceEmbedder)),
-	)
+	visionWorker := vision.NewService(busClient, busClient, memoryBlobStore, visionAdapter, logger.With(log.Str("module", "vision")))
+	chunkerWorker := chunker.NewService(busClient, busClient, memoryBlobStore, logger.With(log.Str("module", "chunker")))
+	embedWorker := embedder.NewService(busClient, busClient, memoryBlobStore, embedAdapter, logger.With(log.Str("module", consts.ServiceEmbedder)))
 
 	// --- Transport ---
-
-	gatewayHandler := gatewayhttp.NewHandler(
-		gatewayCore,
-		logger.With(log.Str("module", consts.ServiceGateway)),
-	)
+	gatewayHandler := gatewayhttp.NewHandler(gatewayCore, logger.With(log.Str("module", consts.ServiceGateway)))
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/ingest", gatewayhttp.MetricsMiddleware("/v1/ingest", gatewayHandler.HandleIngest))
 	mux.HandleFunc("/v1/search", gatewayhttp.MetricsMiddleware("/v1/search", gatewayHandler.HandleSearch))
+	mux.HandleFunc("/v1/events/stream", gatewayHandler.HandleStreamEvents)
+	mux.HandleFunc("/v1/blob", gatewayHandler.HandleBlob)
 	mux.Handle("/metrics", promhttp.Handler())
 
 	httpServer := infrahttp.NewServer(
@@ -166,7 +147,9 @@ func main() {
 		routerCore,
 		gatewayCore,
 		engineCore,
-		embeddedWorker,
+		visionWorker,
+		chunkerWorker,
+		embedWorker,
 	)
 
 	logger.Info().Msg(logmsg.AppStarting)

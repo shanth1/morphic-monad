@@ -82,7 +82,8 @@ type RouterRule struct {
 
 type ToolsConfig struct {
 	BlobStore BlobStoreConfig `mapstructure:"blob_store" yaml:"blob_store"`
-	LLM       LLMConfig       `mapstructure:"llm" yaml:"llm"`
+	Embedder  LLMConfig       `mapstructure:"embedder" yaml:"embedder"`
+	Vision    LLMConfig       `mapstructure:"vision" yaml:"vision"`
 }
 
 type BlobStoreConfig struct {
@@ -99,11 +100,11 @@ type BlobStoreConfig struct {
 }
 
 type LLMConfig struct {
-	Provider string `mapstructure:"provider" yaml:"provider" validate:"omitempty,oneof=openai ollama mock"`
-	OpenAI   struct {
-		Key   string `mapstructure:"key" yaml:"key" env:"OPENAI_KEY"`
-		Model string `mapstructure:"model" yaml:"model" default:"gpt-4-turbo"`
-	} `mapstructure:"openai" yaml:"openai"`
+	Provider string `mapstructure:"provider" yaml:"provider" validate:"required,oneof=ollama mock"`
+	Ollama   struct {
+		BaseURL string `mapstructure:"base_url" yaml:"base_url" default:"http://localhost:11434"`
+		Model   string `mapstructure:"model" yaml:"model"`
+	} `mapstructure:"ollama" yaml:"ollama"`
 }
 
 // ========================================================================

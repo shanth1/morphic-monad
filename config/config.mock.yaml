@@ -1,0 +1,19 @@
+system:
+  env: 'local'
+logger:
+  app: 'morphic-monad'
+  level: 'info'
+  service: 'monolith'
+transport:
+  nats:
+    url: 'nats://localhost:4222'
+modules:
+  gateway:
+    port: '8080'
+  tools:
+    blob_store:
+      provider: 'memory'
+    embedder:
+      provider: 'mock'
+    vision:
+      provider: 'mock'

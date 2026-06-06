@@ -18,8 +18,11 @@ var (
 )
 
 type chunkRecord struct {
-	DocID  domain.DocumentID
-	Vector domain.Vector
+	DocID    domain.DocumentID
+	Vector   domain.Vector
+	Text     string
+	FileURI  string
+	MimeType string
 }
 
 type MemoryVectorDB struct {
@@ -34,7 +37,16 @@ func NewMemoryVectorDB() *MemoryVectorDB {
 }
 
 // Upsert saves or updates a document vector for a specific tenant.
-func (db *MemoryVectorDB) Upsert(ctx context.Context, tenantID domain.TenantID, docID domain.DocumentID, chunkID domain.ChunkID, vector domain.Vector) error {
+func (db *MemoryVectorDB) Upsert(
+	ctx context.Context,
+	tenantID domain.TenantID,
+	docID domain.DocumentID,
+	chunkID domain.ChunkID,
+	vector domain.Vector,
+	text string,
+	fileURI string,
+	mimeType string,
+) error {
 	if tenantID == "" {
 		return ErrEmptyTenant
 	}
@@ -49,7 +61,13 @@ func (db *MemoryVectorDB) Upsert(ctx context.Context, tenantID domain.TenantID, 
 		db.store[tenantID] = make(map[domain.ChunkID]chunkRecord)
 	}
 
-	db.store[tenantID][chunkID] = chunkRecord{DocID: docID, Vector: vector}
+	db.store[tenantID][chunkID] = chunkRecord{
+		DocID:    docID,
+		Vector:   vector,
+		Text:     text,
+		FileURI:  fileURI,
+		MimeType: mimeType,
+	}
 	return nil
 }
 
@@ -82,6 +100,9 @@ func (db *MemoryVectorDB) Search(ctx context.Context, tenantID domain.TenantID, 
 			DocumentID: record.DocID,
 			ChunkID:    chunkID,
 			Score:      score,
+			Text:       record.Text,
+			FileURI:    record.FileURI,
+			MimeType:   record.MimeType,
 		})
 	}
 

@@ -77,7 +77,7 @@ func (s *Service) handleReply(ctx context.Context, msg events.Message) error {
 }
 
 // IngestDocument is a business use case for uploading new data to the platform.
-func (s *Service) IngestDocument(ctx context.Context, tenantID, contextText, filename, mimeType string, size int64, fileReader io.Reader) (string, error) {
+func (s *Service) IngestDocument(ctx context.Context, tenantID, correlationID, contextText, filename, mimeType string, size int64, fileReader io.Reader) (string, error) {
 	var blobURI string
 	var err error
 
@@ -101,29 +101,22 @@ func (s *Service) IngestDocument(ctx context.Context, tenantID, contextText, fil
 		size = int64(len(contextText))
 	}
 
-	// Upload heavy file to Blob Storage (if provided)
 	if fileReader != nil && size > 0 {
 		blobURI, err = s.blobStore.Upload(ctx, tenantID, filename, fileReader, size)
 		if err != nil {
-			s.logger.Error().Err(err).Str("tenant", tenantID).Msg("failed to upload blob")
 			return "", fmt.Errorf("upload to blob store: %w", err)
 		}
 	}
 
 	docID := uuid.NewString()
-
 	payload := events.IngestPayload{
 		DocumentID:  docID,
 		ContextText: contextText,
 		BlobURI:     blobURI,
 		MimeType:    mimeType,
 		SizeBytes:   size,
-		Metadata: map[string]string{
-			"original_name": filename,
-		},
 	}
 
-	correlationID := uuid.NewString()
 	env, err := events.NewEnvelope(tenantID, correlationID, events.EventIngestRequested, "gateway", payload)
 	if err != nil {
 		return "", fmt.Errorf("create envelope: %w", err)
@@ -140,14 +133,25 @@ func (s *Service) IngestDocument(ctx context.Context, tenantID, contextText, fil
 }
 
 // SearchDocuments performs a synchronous search over the asynchronous event bus.
-func (s *Service) SearchDocuments(ctx context.Context, tenantID, queryText, blobURI string, topK int) ([]events.SearchResult, error) {
+func (s *Service) SearchDocuments(ctx context.Context, tenantID, queryText, filename, mimeType string, size int64, fileReader io.Reader, topK int) ([]events.SearchResult, error) {
+	var blobURI string
+	var err error
+
+	if fileReader != nil && size > 0 {
+		blobURI, err = s.blobStore.Upload(ctx, tenantID, filename, fileReader, size)
+		if err != nil {
+			return nil, fmt.Errorf("upload to blob store: %w", err)
+		}
+	}
+
+	correlationID := uuid.NewString()
 	payload := events.SearchPayload{
 		QueryText: queryText,
 		BlobURI:   blobURI,
 		TopK:      topK,
+		MimeType:  mimeType,
 	}
 
-	correlationID := uuid.NewString()
 	env, err := events.NewEnvelope(tenantID, correlationID, events.EventSearchRequested, "gateway", payload)
 	if err != nil {
 		return nil, fmt.Errorf("create envelope: %w", err)
@@ -191,4 +195,27 @@ func (s *Service) SearchDocuments(ctx context.Context, tenantID, queryText, blob
 		}
 		return resultPayload.Results, nil
 	}
+}
+
+func (s *Service) ListenEvents(ctx context.Context, correlationID string) (<-chan *events.Envelope, error) {
+	ch := make(chan *events.Envelope, 50)
+
+	err := s.subscriber.SubscribeEphemeral(ctx, "platform.>", func(env *events.Envelope) {
+		// TODO:
+		// if env.CorrelationID == correlationID {
+		select {
+		case ch <- env:
+		default: // drop if channel full
+		}
+		// }
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return ch, nil
+}
+
+func (s *Service) GetBlob(ctx context.Context, uri string) (io.ReadCloser, error) {
+	return s.blobStore.Download(ctx, uri)
 }
