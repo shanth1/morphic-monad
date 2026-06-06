@@ -1,0 +1,58 @@
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.microservice
+      args:
+        SERVICE_NAME: gateway
+    ports:
+      - '8080:8080'
+    environment:
+      - APP_ENV=local
+      - NATS_URL=nats://nats:4222
+      - S3_ENDPOINT=http://s3:9090
+    depends_on:
+      nats:
+        condition: service_healthy
+      s3:
+        condition: service_healthy
+
+  router:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.microservice
+      args:
+        SERVICE_NAME: router
+    environment:
+      - APP_ENV=local
+      - NATS_URL=nats://nats:4222
+    depends_on:
+      nats:
+        condition: service_healthy
+
+  engine:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.microservice
+      args:
+        SERVICE_NAME: engine
+    environment:
+      - APP_ENV=local
+      - NATS_URL=nats://nats:4222
+    depends_on:
+      nats:
+        condition: service_healthy
+
+  embedder:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.microservice
+      args:
+        SERVICE_NAME: embedder
+    environment:
+      - APP_ENV=local
+      - NATS_URL=nats://nats:4222
+      - S3_ENDPOINT=http://s3:9090
+    depends_on:
+      nats:
+        condition: service_healthy

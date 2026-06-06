@@ -1,0 +1,173 @@
+# ==============================================================================
+# MORPHIC MONAD CONFIGURATION TEMPLATE
+# ==============================================================================
+# This file serves as the blueprint for the application configuration.
+# Values can be overridden by Environment Variables (e.g., APP_ENV, NATS_URL).
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. CORE SYSTEM & INFRASTRUCTURE
+# ------------------------------------------------------------------------------
+system:
+  env: 'local' # Options: local, dev, stage, prod
+  id: 'monad-node-1' # Unique instance ID
+  version: '0.1.0' # Application version
+
+logger:
+  app: 'morphic-monad'
+  level: 'debug' # Options: debug, info, warn, error, trace
+  service: 'monolith' # Overridden by specific services in microservice mode
+  udp_address: '' # Optional: e.g., "logstash:5000" for centralized logging
+  enable_caller: false # Log file and line number (useful for debugging)
+
+transport:
+  # NATS JetStream is the unified backbone for both Monolith and Microservices
+  nats:
+    url: 'nats://localhost:4222' # Can be overridden via ENV NATS_URL
+    stream_name: 'PLATFORM_EVENTS' # JetStream persistent stream name
+
+# ------------------------------------------------------------------------------
+# 2. MODULES (CORE BUSINESS LOGIC)
+# ------------------------------------------------------------------------------
+modules:
+  # --- Gateway Service (Ingress & Claim Check) ---
+  gateway:
+    port: '8080'
+    read_timeout: '15s'
+    write_timeout: '15s'
+    max_upload_size: 52428800 # 50 MB - Prevents OOM by limiting streaming size
+    # auth_enabled: false
+    # api_key_header: "X-API-Key"
+
+  # --- Router Service (Event Orchestrator) ---
+  router:
+    strategy: 'static' # Options: static, llm
+
+    # Configuration for "static" strategy (Rule Engine)
+    rules:
+      # Rule 1: If a heavy document is uploaded -> Send to OCR Worker
+      - match:
+          type: 'document.uploaded' # Maps to events.EventDocumentUploaded
+        target_topic: 'platform.tasks.ocr'
+
+      # Rule 2: If text is extracted/ingested -> Send to Embedder Worker
+      - match:
+          type: 'task.ocr.completed'
+        target_topic: 'platform.tasks.embed'
+
+    # Configuration for "llm" strategy (Intelligent Routing)
+    llm_classifier:
+      system_prompt: "Classify the incoming JSON envelope into 'ingest' or 'search' intent."
+      adapter:
+        provider: 'openai'
+        openai:
+          model: 'gpt-4-turbo'
+          # key: via ENV LLM_OPENAI_KEY
+
+  # --- Ingestor (Pipeline Definitions) ---
+  ingestor:
+    enabled: true
+    pipelines:
+      general_ingest:
+        description: 'Standard pipeline for document processing'
+        steps:
+          - name: 'OCR Processing'
+            worker: 'worker.ocr.extract'
+            timeout: '60s'
+            params:
+              lang: 'eng'
+          - name: 'Text Embedding'
+            worker: 'worker.embed.vectorize'
+            timeout: '10s'
+          - name: 'Save to VectorDB'
+            worker: 'worker.vector.upsert'
+            timeout: '5s'
+
+  # --- Engine (Dynamic RAG/Agent) ---
+  engine:
+    enabled: true
+    mode: 'rag' # Options: search, rag, agent
+
+    system_prompt: 'You are a helpful assistant. Use the provided context to answer questions.'
+    max_tokens: 1000
+    temperature: 0.7
+
+    llm:
+      provider: 'openai'
+      openai:
+        model: 'gpt-4o'
+        # key: via ENV LLM_OPENAI_KEY
+
+    enabled_tools:
+      - 'web_search'
+      - 'calculator'
+
+  # ----------------------------------------------------------------------------
+  # 3. TOOLS (SECONDARY ADAPTERS CONFIGURATION)
+  # ----------------------------------------------------------------------------
+  tools:
+    # --- Blob Store (Claim Check File Storage) ---
+    blob_store:
+      provider: 'memory' # Options: s3 (Production), memory (Local Monolith)
+
+      s3:
+        endpoint: 'http://localhost:9090' # LocalStack address
+        bucket: 'platform-documents'
+        region: 'us-east-1'
+        use_ssl: false
+        use_path_style: true # REQUIRED for LocalStack / MinIO
+        access_key: 'test' # ENV S3_SECRET_KEY
+        secret_key: 'test' # ENV S3_ACCESS_KEY
+
+    # --- OCR (Image/PDF to Text) ---
+    ocr:
+      provider: 'mock' # Options: tesseract, google, mock
+      tesseract:
+        path: '/usr/bin/tesseract'
+        languages: 'eng+rus'
+      google:
+        # key: via ENV OCR_GOOGLE_KEY
+        key: ''
+
+    # --- Embedder (Text to Vector) ---
+    embedder:
+      provider: 'openai' # Options: openai, openrouter, ollama, local, mock
+      dimensions: 1536
+
+      openai:
+        model: 'text-embedding-3-small'
+        # key: via ENV OPENAI_KEY
+
+      openrouter:
+        model: 'text-embedding-ada-002'
+        # key: via ENV OPENROUTER_KEY
+
+      ollama:
+        base_url: 'http://localhost:11434'
+        model: 'nomic-embed-text'
+
+      local:
+        model_path: './models/all-MiniLM-L6-v2.onnx'
+        use_gpu: false
+
+    # --- Vector DB (Semantic Index) ---
+    vector_db:
+      provider: 'qdrant' # Options: qdrant, milvus, mock
+      qdrant:
+        host: 'localhost'
+        port: 6334
+        collection_prefix: 'tenant_' # For multi-tenancy namespaces
+        use_tls: false
+        # key: via ENV QDRANT_KEY
+
+    # --- Web Search (External Data) ---
+    web_search:
+      provider: 'mock' # Options: google, tavily, mock
+      google:
+        # key: via ENV GOOGLE_SEARCH_KEY
+        # cx: via ENV GOOGLE_SEARCH_CX
+        key: ''
+        cx: ''
+      tavily:
+        # key: via ENV TAVILY_KEY
+        key: ''
